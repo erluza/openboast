@@ -3,61 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenBoast - Líneas de Colectivo</title>
+    <title>OpenBoast - Creador de Recorridos Animados</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; overflow: hidden; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        body { font-family: 'Inter', sans-serif; overflow: hidden; margin: 0; padding: 0; user-select: none; background: #0f172a; }
         #map { height: 100vh; width: 100%; z-index: 0; }
-        .custom-scroll::-webkit-scrollbar { width: 6px; }
-        .custom-scroll::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); }
-        .custom-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 3px; }
+        
+        .custom-scroll::-webkit-scrollbar { width: 5px; }
+        .custom-scroll::-webkit-scrollbar-track { background: rgba(0,0,0,0.03); }
+        .custom-scroll::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.25); border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,0.45); }
+
+        /* Point Markers */
         .point-marker {
             background: #3b82f6; color: white; border-radius: 50%;
             width: 32px; height: 32px;
             display: flex; align-items: center; justify-content: center;
-            font-weight: 700; font-size: 14px;
+            font-weight: 800; font-size: 13px;
             border: 3px solid white;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            transition: transform 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
         }
+        .point-marker:hover { transform: scale(1.18); }
         .point-marker.start { background: #10b981; }
         .point-marker.end { background: #ef4444; }
         .point-marker.hidden-marker { opacity: 0; pointer-events: none; }
+
+        /* Vehicle Marker */
         .vehicle-marker {
-            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+            filter: drop-shadow(0 6px 12px rgba(0,0,0,0.38));
             transition: none;
             z-index: 1000 !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .vehicle-icon {
-            font-size: 32px; line-height: 1; display: block; transform-origin: center center;
-        }
-        .vehicle-text {
-            font-size: 14px; font-weight: 800; line-height: 1;
-            display: block; transform-origin: center center; color: white;
+        .vehicle-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform-origin: center center;
+            transition: transform 0.05s linear;
         }
         .vehicle-circle {
-            width: 40px; height: 40px; border-radius: 50%;
+            width: 44px; height: 44px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             border: 3px solid white;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.35);
         }
-        .route-pulse { animation: pulse-line 2s infinite; }
-        @keyframes pulse-line {
-            0% { stroke-opacity: 0.6; } 50% { stroke-opacity: 1; } 100% { stroke-opacity: 0.6; }
+
+        /* TravelBoast Distance Badge */
+        .travel-distance-badge {
+            position: absolute;
+            background: #ef4444;
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 12px;
+            padding: 3px 9px;
+            border-radius: 8px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.35);
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 999;
+            transform: translate(-50%, 26px);
+            letter-spacing: 0.2px;
+            border: 1.5px solid rgba(255,255,255,0.85);
+            transition: opacity 0.2s ease;
         }
+
+        /* Overlays */
         .point-overlay {
-            position: absolute; bottom: 40px; left: 50%;
-            transform: translateX(-50%) translateY(20px);
-            background: rgba(255,255,255,0.95); backdrop-filter: blur(12px);
-            padding: 20px; border-radius: 16px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-            max-width: 320px; width: 90%;
+            position: absolute; bottom: 36px; left: 50%;
+            transform: translateX(-50%) translateY(25px);
+            background: rgba(255,255,255,0.96); backdrop-filter: blur(16px);
+            padding: 20px; border-radius: 20px;
+            box-shadow: 0 20px 45px rgba(0,0,0,0.22);
+            max-width: 360px; width: 88%;
             opacity: 0; pointer-events: none;
             transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            z-index: 500; border: 1px solid rgba(0,0,0,0.08);
+            z-index: 500; border: 1px solid rgba(255,255,255,0.6);
         }
         .point-overlay.active {
             opacity: 1; pointer-events: auto;
@@ -65,18 +93,20 @@
         }
         .point-overlay img {
             width: 100%; height: 180px; object-fit: cover;
-            border-radius: 12px; margin-bottom: 12px;
+            border-radius: 14px; margin-bottom: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
+
         .center-overlay {
             position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%) scale(0.9);
-            background: rgba(255,255,255,0.95); backdrop-filter: blur(16px);
-            padding: 32px; border-radius: 24px;
-            box-shadow: 0 24px 60px rgba(0,0,0,0.25);
-            max-width: 420px; width: 90%;
+            transform: translate(-50%, -50%) scale(0.92);
+            background: rgba(255,255,255,0.96); backdrop-filter: blur(20px);
+            padding: 30px; border-radius: 24px;
+            box-shadow: 0 25px 65px rgba(0,0,0,0.28);
+            max-width: 440px; width: 90%;
             opacity: 0; pointer-events: none;
-            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-            z-index: 600; border: 1px solid rgba(0,0,0,0.08);
+            transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 600; border: 1px solid rgba(255,255,255,0.7);
             text-align: center;
         }
         .center-overlay.active {
@@ -84,50 +114,126 @@
             transform: translate(-50%, -50%) scale(1);
         }
         .center-overlay img {
-            width: 100%; max-height: 220px; object-fit: cover;
+            width: 100%; max-height: 230px; object-fit: cover;
             border-radius: 16px; margin-bottom: 16px;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
         }
+
+        /* Glassmorphism Panel */
         .glass-panel {
-            background: rgba(255,255,255,0.92); backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,0.5);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            background: rgba(255,255,255,0.94); backdrop-filter: blur(24px);
+            border: 1px solid rgba(255,255,255,0.8);
+            box-shadow: 0 16px 40px rgba(15,23,42,0.15), 0 0 1px rgba(0,0,0,0.1);
         }
+        .panel-hidden {
+            transform: translateX(-110%);
+            pointer-events: none;
+        }
+
+        /* Range sliders */
         input[type=range] {
             -webkit-appearance: none; width: 100%; height: 6px;
-            background: #e5e7eb; border-radius: 3px; outline: none;
+            background: #e2e8f0; border-radius: 3px; outline: none;
         }
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none; width: 18px; height: 18px;
-            background: #3b82f6; border-radius: 50%; cursor: pointer;
-            border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            background: #2563eb; border-radius: 50%; cursor: pointer;
+            border: 2.5px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.25);
+            transition: transform 0.15s ease;
         }
-        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
-        .animate-slide-in { animation: slideIn 0.3s ease-out; }
-        .leaflet-routing-container { display: none !important; }
-        .panel-hidden { transform: translateX(-110%); }
-        .panel-toggle {
-            position: absolute; top: 16px; left: 16px; z-index: 60;
-            width: 40px; height: 40px;
-            background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* Aspect Ratio Framing Container */
+        #framing-container {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 300;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            transition: opacity 0.3s ease;
+        }
+        #framing-box {
+            position: relative;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, var(--frame-opacity, 0.65));
+            border: 2px dashed rgba(255, 255, 255, 0.75);
             border-radius: 12px;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            cursor: pointer; border: 1px solid rgba(0,0,0,0.08);
-            font-size: 18px; transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            pointer-events: none;
         }
-        .panel-toggle:hover { transform: scale(1.05); }
+        #framing-box.frame-solid {
+            border: none;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 1);
+            border-radius: 0;
+        }
+        #framing-label {
+            position: absolute;
+            top: 10px;
+            left: 14px;
+            background: rgba(0,0,0,0.65);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        /* Floating HUD */
+        .hud-pill {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        /* Pulsing Trail Effect */
+        .route-trail-glow {
+            filter: drop-shadow(0 2px 6px rgba(239, 68, 68, 0.45));
+        }
+
+        /* Drop Zone */
+        #drop-zone {
+            position: absolute; inset: 0; z-index: 1000;
+            background: rgba(37, 99, 235, 0.85); backdrop-filter: blur(8px);
+            display: none; align-items: center; justify-content: center;
+            border: 4px dashed white; margin: 20px; border-radius: 24px;
+        }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800">
+<body class="text-gray-800">
 
+<!-- Map Canvas -->
 <div id="map"></div>
 
+<!-- Aspect Ratio Framing Matte -->
+<div id="framing-container" class="hidden">
+    <div id="framing-box">
+        <div id="framing-label">9:16 Reels / TikTok</div>
+    </div>
+</div>
+
+<!-- Drag & Drop Zone for GPX / KML / GeoJSON -->
+<div id="drop-zone" class="flex flex-col text-white text-center p-8 pointer-events-none">
+    <div class="text-6xl mb-4">📂</div>
+    <h2 class="text-3xl font-extrabold mb-2">Suelta tu archivo aquí</h2>
+    <p class="text-lg opacity-90">Soporta rutas GPX, KML, GeoJSON y backups de OpenBoast</p>
+</div>
+
+<!-- Overlays Container -->
 <div id="overlay-container" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:400;">
+    <!-- Point Passing Overlay -->
     <div id="point-content" class="point-overlay">
         <img id="pc-image" src="" alt="" style="display:none;">
         <h3 id="pc-title" class="text-lg font-bold text-gray-800 mb-1"></h3>
         <p id="pc-text" class="text-sm text-gray-600 leading-relaxed"></p>
     </div>
+    <!-- Center (Start / End) Overlay -->
     <div id="center-content" class="center-overlay">
         <img id="cc-image" src="" alt="" style="display:none;">
         <h2 id="cc-title" class="text-2xl font-bold text-gray-800 mb-2"></h2>
@@ -135,314 +241,599 @@
     </div>
 </div>
 
-<div id="panel-toggle-btn" class="panel-toggle" style="display:none;" onclick="togglePanel()" title="Mostrar panel (H)">☰</div>
+<!-- Top Floating HUD Bar (Visible when drawer is closed or for quick playback) -->
+<div id="quick-hud" class="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 p-1.5 rounded-2xl hud-pill text-white transition-all duration-300">
+    <button onclick="toggleAnimation()" id="hud-play-btn" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-bold transition-all shadow-md">
+        <span id="hud-play-icon">▶</span>
+        <span id="hud-play-text">Iniciar (Espacio)</span>
+    </button>
+    <div class="h-4 w-[1px] bg-white/20"></div>
+    <button onclick="cycleFrameMode()" id="hud-frame-btn" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-xs font-medium text-gray-300 hover:text-white flex items-center gap-1" title="Cambiar formato de pantalla (M)">
+        <span>📱</span> <span id="hud-frame-text">Libre</span>
+    </button>
+    <button onclick="fitBounds()" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-xs font-medium text-gray-300 hover:text-white" title="Centrar todo el recorrido">
+        🔍 Centrar
+    </button>
+    <div class="h-4 w-[1px] bg-white/20"></div>
+    <button onclick="togglePanel()" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-xs font-medium text-blue-300 hover:text-white flex items-center gap-1" title="Abrir/Cerrar panel (H)">
+        <span>⚙️</span> <span id="hud-drawer-text">Opciones</span>
+    </button>
+</div>
 
-<div id="control-panel" class="absolute top-4 left-4 bottom-4 w-96 glass-panel rounded-2xl flex flex-col z-50 overflow-hidden animate-slide-in">
-    <div class="p-5 border-b border-gray-200/50">
+<!-- Floating Distance Badge (Fixed mode or tracking vehicle) -->
+<div id="floating-km-badge" class="travel-distance-badge hidden">0 km</div>
+
+<!-- Main Control Drawer -->
+<div id="control-panel" class="absolute top-4 left-4 bottom-4 w-[410px] glass-panel rounded-3xl flex flex-col z-50 overflow-hidden transition-transform duration-300 ease-out shadow-2xl">
+    <!-- Header -->
+    <div class="p-4 border-b border-gray-200/60 bg-white/50 flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg">🚌</div>
-            <div>
-                <h1 class="font-bold text-lg leading-tight">OpenBoast</h1>
-                <p class="text-xs text-gray-500">Líneas de Colectivo</p>
+            <div class="w-10 h-10 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center text-white text-xl shadow-md shadow-blue-500/30">
+                🚀
             </div>
-            <button onclick="togglePanel()" class="ml-auto p-1.5 hover:bg-gray-100 rounded-lg text-gray-400" title="Ocultar panel (H)">✕</button>
+            <div>
+                <h1 class="font-black text-base text-gray-900 tracking-tight leading-none">OpenBoast</h1>
+                <p class="text-[11px] text-gray-500 font-medium mt-0.5">Estilo TravelBoast Pro</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-1">
+            <button onclick="toggleFullscreen()" class="p-2 hover:bg-gray-100 rounded-xl text-gray-500 text-sm transition-colors" title="Pantalla completa (F)">⛶</button>
+            <button onclick="togglePanel()" class="p-2 hover:bg-gray-100 rounded-xl text-gray-500 text-sm transition-colors" title="Ocultar panel (H)">✕</button>
         </div>
     </div>
 
-    <div class="flex-1 overflow-y-auto custom-scroll p-5 space-y-5">
-        <div class="bg-gray-50 rounded-xl p-4 space-y-3">
-            <div class="flex items-center justify-between">
-                <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Líneas & Ramales</h2>
-                <div class="flex gap-1">
-                    <button onclick="exportData()" class="p-1.5 hover:bg-blue-100 rounded-lg text-blue-600 text-xs font-medium" title="Exportar">💾</button>
-                    <button onclick="document.getElementById('import-file').click()" class="p-1.5 hover:bg-blue-100 rounded-lg text-blue-600 text-xs font-medium" title="Cargar">📂</button>
-                    <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(this)">
+    <!-- Navigation Tabs -->
+    <div class="flex bg-gray-100/90 p-1.5 mx-4 mt-3 rounded-2xl gap-1 border border-gray-200/50">
+        <button onclick="setTab('route')" id="tab-btn-route" class="flex-1 py-1.5 px-2 text-xs font-bold rounded-xl bg-white shadow-sm text-blue-600 transition-all flex items-center justify-center gap-1">
+            📍 <span>Ruta</span>
+        </button>
+        <button onclick="setTab('vehicle')" id="tab-btn-vehicle" class="flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-gray-600 hover:text-gray-900 transition-all flex items-center justify-center gap-1">
+            🚗 <span>Vehículo</span>
+        </button>
+        <button onclick="setTab('camera')" id="tab-btn-camera" class="flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-gray-600 hover:text-gray-900 transition-all flex items-center justify-center gap-1">
+            🎥 <span>Cámara</span>
+        </button>
+        <button onclick="setTab('overlays')" id="tab-btn-overlays" class="flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-gray-600 hover:text-gray-900 transition-all flex items-center justify-center gap-1">
+            💬 <span>Overlays</span>
+        </button>
+    </div>
+
+    <!-- Drawer Content Scroll Area -->
+    <div class="flex-1 overflow-y-auto custom-scroll p-4 space-y-4">
+        
+        <!-- TAB 1: RUTA Y PUNTOS -->
+        <div id="tab-content-route" class="space-y-4">
+            
+            <!-- Quick GPS Import & Library -->
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/80 rounded-2xl p-3.5 space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1">
+                        📦 Guardar / Cargar
+                    </span>
+                    <div class="flex items-center gap-1">
+                        <button onclick="document.getElementById('import-gps-file').click()" class="px-2 py-1 bg-white text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold border border-blue-200 shadow-sm flex items-center gap-1" title="Importar GPX, KML o GeoJSON">
+                            📥 <span>GPS / JSON</span>
+                        </button>
+                        <button onclick="exportData()" class="px-2 py-1 bg-white text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold border border-blue-200 shadow-sm flex items-center gap-1" title="Exportar archivo">
+                            💾
+                        </button>
+                        <input type="file" id="import-gps-file" accept=".gpx,.kml,.geojson,.json" class="hidden" onchange="handleGpsFileImport(this)">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Línea</label>
+                        <select id="line-select" onchange="onLineChange()" class="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Nueva Línea --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Ramal</label>
+                        <select id="branch-select" onchange="onBranchChange()" class="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Nuevo Ramal --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="line-name-row" style="display:none;">
+                    <input type="text" id="line-name" placeholder="Nombre de la línea (ej: Línea 60)" class="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs">
+                </div>
+                <div id="branch-name-row" style="display:none;">
+                    <input type="text" id="branch-name" placeholder="Nombre del ramal (ej: Constitución - Tigre)" class="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs">
+                </div>
+
+                <div class="flex gap-2 pt-1">
+                    <button onclick="saveCurrentBranch()" class="flex-1 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm">
+                        💾 Guardar Ramal
+                    </button>
+                    <button onclick="deleteCurrentBranch()" class="px-3 py-1.5 bg-white text-red-600 border border-red-200 rounded-xl text-xs font-bold hover:bg-red-50 transition-colors" title="Eliminar ramal actual">
+                        🗑️
+                    </button>
                 </div>
             </div>
+
+            <!-- Mode Selector: Navigate / Add Point -->
+            <div class="flex bg-gray-100 p-1 rounded-2xl gap-1 border border-gray-200/60">
+                <button id="mode-navigate" onclick="setMode('navigate')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-white text-gray-900 shadow-sm transition-all flex items-center justify-center gap-1.5">
+                    🧭 <span>Navegar Mapa</span>
+                </button>
+                <button id="mode-add" onclick="setMode('add')" class="flex-1 py-2 rounded-xl text-xs font-bold text-gray-500 hover:text-gray-800 transition-all flex items-center justify-center gap-1.5">
+                    📍 <span>+ Agregar Punto</span>
+                </button>
+            </div>
+            <p class="text-[11px] text-gray-400 text-center -mt-2">Tip: También puedes hacer <b>doble clic</b> en el mapa para añadir un punto</p>
+
+            <!-- Points List -->
             <div>
-                <label class="text-xs font-medium text-gray-500 mb-1 block">Línea</label>
-                <select id="line-select" onchange="onLineChange()" class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">-- Nueva línea --</option>
-                </select>
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-xs font-extrabold text-gray-700 uppercase tracking-wider">Hitos del Recorrido</h2>
+                    <span id="point-count" class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-black">0</span>
+                </div>
+                <div id="points-list" class="space-y-2">
+                    <div class="text-center py-8 text-gray-400 text-xs italic bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                        Haz clic en "+ Agregar Punto" y luego en el mapa para comenzar, o arrastra un archivo GPX/KML.
+                    </div>
+                </div>
             </div>
-            <div id="line-name-row" style="display:none;">
-                <input type="text" id="line-name" placeholder="Nombre de la línea (ej: Línea 1)" class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-            <div>
-                <label class="text-xs font-medium text-gray-500 mb-1 block">Ramal</label>
-                <select id="branch-select" onchange="onBranchChange()" class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">-- Nuevo ramal --</option>
-                </select>
-            </div>
-            <div id="branch-name-row" style="display:none;">
-                <input type="text" id="branch-name" placeholder="Nombre del ramal (ej: Ramal A)" class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
+
+            <!-- Recalculate / Optimize -->
             <div class="flex gap-2">
-                <button onclick="saveCurrentBranch()" class="flex-1 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors">💾 Guardar Ramal</button>
-                <button onclick="deleteCurrentBranch()" class="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors">🗑️</button>
+                <button onclick="recalculateRoutes()" class="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1">
+                    🔄 Recalcular Calles (OSRM)
+                </button>
+                <button onclick="reverseRoute()" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all" title="Invertir sentido del viaje">
+                    ⇄ Invertir
+                </button>
             </div>
         </div>
 
-        <div class="bg-gray-50 rounded-xl p-1 flex gap-1">
-            <button id="mode-navigate" class="flex-1 py-2 px-3 rounded-lg text-sm font-medium bg-white shadow-sm text-gray-800 transition-all" onclick="setMode('navigate')">🧭 Navegar</button>
-            <button id="mode-add" class="flex-1 py-2 px-3 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 transition-all" onclick="setMode('add')">📍 + Punto</button>
-        </div>
-
-        <div>
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Puntos de Ruta</h2>
-                <span id="point-count" class="text-xs bg-gray-200 px-2 py-1 rounded-full font-medium">0</span>
+        <!-- TAB 2: VEHÍCULO Y ESTILO -->
+        <div id="tab-content-vehicle" class="space-y-4 hidden">
+            
+            <!-- Vehicle Presets Grid -->
+            <div>
+                <label class="text-xs font-extrabold text-gray-700 uppercase tracking-wider block mb-2">Tipo de Vehículo</label>
+                <div class="grid grid-cols-4 gap-1.5" id="vehicle-presets-container">
+                    <!-- Populated dynamically via JS -->
+                </div>
             </div>
-            <div id="points-list" class="space-y-2">
-                <div class="text-center py-8 text-gray-400 text-sm italic">Haz clic en "+ Punto" y luego en el mapa para comenzar</div>
-            </div>
-        </div>
 
-        <div class="border-t border-gray-200 pt-4">
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Configuración de Ruta</h2>
-            <div class="space-y-4">
-                <div>
-                    <label class="text-xs font-medium text-gray-500 mb-1 block">Color del recorrido</label>
-                    <div class="flex gap-2 flex-wrap">
-                        <button onclick="setRouteColor('#3b82f6')" class="w-8 h-8 rounded-full bg-blue-500 ring-2 ring-offset-2 ring-blue-500 transition-all hover:scale-110"></button>
-                        <button onclick="setRouteColor('#ef4444')" class="w-8 h-8 rounded-full bg-red-500 ring-2 ring-offset-2 ring-transparent hover:ring-red-500 transition-all hover:scale-110"></button>
-                        <button onclick="setRouteColor('#10b981')" class="w-8 h-8 rounded-full bg-green-500 ring-2 ring-offset-2 ring-transparent hover:ring-green-500 transition-all hover:scale-110"></button>
-                        <button onclick="setRouteColor('#f59e0b')" class="w-8 h-8 rounded-full bg-amber-500 ring-2 ring-offset-2 ring-transparent hover:ring-amber-500 transition-all hover:scale-110"></button>
-                        <button onclick="setRouteColor('#8b5cf6')" class="w-8 h-8 rounded-full bg-purple-500 ring-2 ring-offset-2 ring-transparent hover:ring-purple-500 transition-all hover:scale-110"></button>
-                        <button onclick="setRouteColor('#ec4899')" class="w-8 h-8 rounded-full bg-pink-500 ring-2 ring-offset-2 ring-transparent hover:ring-pink-500 transition-all hover:scale-110"></button>
-                        <input type="color" id="custom-color" onchange="setRouteColor(this.value)" class="w-8 h-8 rounded-full overflow-hidden cursor-pointer border-0 p-0" value="#3b82f6">
+            <!-- Custom Vehicle Image / File Upload -->
+            <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200/80 space-y-2.5">
+                <label class="text-xs font-bold text-gray-700 block">🖼️ Imagen Personalizada del Vehículo</label>
+                
+                <div class="flex items-center gap-3">
+                    <div id="vehicle-preview-box" class="w-14 h-14 bg-white border-2 border-dashed border-gray-300 rounded-2xl flex items-center justify-center overflow-hidden shadow-inner flex-shrink-0">
+                        <span class="text-2xl" id="vehicle-preview-content">🚌</span>
+                    </div>
+                    <div class="flex-1 space-y-1.5">
+                        <button onclick="document.getElementById('vehicle-image-file').click()" class="w-full py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1">
+                            📁 <span>Subir desde tu PC</span>
+                        </button>
+                        <input type="file" id="vehicle-image-file" accept="image/*" class="hidden" onchange="handleVehicleImageFile(this)">
+                        <input type="text" id="custom-vehicle" placeholder="O pega enlace https://..." onchange="setCustomVehicleUrl(this.value)" class="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500">
                     </div>
                 </div>
-                <div>
-                    <div class="flex justify-between mb-1">
-                        <label class="text-xs font-medium text-gray-500">Duración total</label>
-                        <span id="duration-display" class="text-xs font-bold text-blue-600">45s</span>
-                    </div>
-                    <input type="range" id="duration-slider" min="10" max="180" value="45" oninput="updateDuration(this.value)">
-                    <div class="flex justify-between text-[10px] text-gray-400 mt-1"><span>10s</span><span>3m</span></div>
+                <div id="vehicle-custom-clear-btn" class="hidden">
+                    <button onclick="clearCustomVehicle()" class="text-[11px] text-red-500 hover:underline font-medium">✕ Quitar imagen personalizada</button>
                 </div>
             </div>
-        </div>
 
-        <div class="border-t border-gray-200 pt-4">
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Vehículo</h2>
-            <div class="grid grid-cols-3 gap-2 mb-3">
-                <button onclick="setVehicle('bus')" id="veh-bus" class="vehicle-btn p-3 rounded-xl border-2 border-blue-500 bg-blue-50 text-2xl transition-all hover:scale-105">🚌<span class="block text-[10px] font-medium text-gray-600 mt-1">Bus</span></button>
-                <button onclick="setVehicle('colectivo')" id="veh-colectivo" class="vehicle-btn p-3 rounded-xl border-2 border-transparent bg-gray-50 text-2xl transition-all hover:scale-105 hover:border-gray-300">🚍<span class="block text-[10px] font-medium text-gray-600 mt-1">Colectivo</span></button>
-                <button onclick="setVehicle('car')" id="veh-car" class="vehicle-btn p-3 rounded-xl border-2 border-transparent bg-gray-50 text-2xl transition-all hover:scale-105 hover:border-gray-300">🚗<span class="block text-[10px] font-medium text-gray-600 mt-1">Auto</span></button>
-            </div>
-            <div class="space-y-3">
+            <!-- Vehicle Details: Text, Size & Rotation -->
+            <div class="space-y-3 bg-gray-50 rounded-2xl p-3 border border-gray-200/80">
                 <div>
-                    <label class="text-xs font-medium text-gray-500 mb-1 block">Texto personalizado (máx. 3 chars)</label>
-                    <input type="text" id="custom-text" maxlength="3" placeholder="Ej: 1A" oninput="updateVehicleSettings()" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                    <label class="text-xs font-bold text-gray-700 mb-1 block">Texto / Número en Vehículo (ej: 60, 152, A)</label>
+                    <input type="text" id="custom-text" maxlength="4" placeholder="Ej: 60" oninput="updateVehicleSettings()" class="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold uppercase focus:ring-2 focus:ring-blue-500">
                 </div>
-                <div class="flex items-center gap-2">
+
+                <div>
+                    <div class="flex justify-between text-xs font-medium text-gray-600 mb-1">
+                        <span>Tamaño del vehículo</span>
+                        <span id="veh-size-display" class="font-bold text-blue-600">42px</span>
+                    </div>
+                    <input type="range" id="veh-size-slider" min="26" max="75" value="42" oninput="updateVehicleSize(this.value)">
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <label for="rotate-vehicle" class="text-xs font-medium text-gray-700">Rotar con la dirección de la ruta</label>
                     <input type="checkbox" id="rotate-vehicle" checked onchange="updateVehicleSettings()" class="w-4 h-4 text-blue-600 rounded">
-                    <label for="rotate-vehicle" class="text-sm text-gray-700">Rotar con la dirección</label>
                 </div>
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" id="show-emoji" checked onchange="updateVehicleSettings()" class="w-4 h-4 text-blue-600 rounded">
-                    <label for="show-emoji" class="text-sm text-gray-700">Mostrar emoji/texto</label>
+
+                <div class="flex items-center justify-between">
+                    <label for="vehicle-shadow" class="text-xs font-medium text-gray-700">Sombra 3D en el vehículo</label>
+                    <input type="checkbox" id="vehicle-shadow" checked onchange="updateVehicleSettings()" class="w-4 h-4 text-blue-600 rounded">
                 </div>
+            </div>
+
+            <!-- Route Ribbon / Trail Styling -->
+            <div class="space-y-3 bg-gray-50 rounded-2xl p-3 border border-gray-200/80">
+                <label class="text-xs font-extrabold text-gray-700 uppercase tracking-wider block">Estilo del Trazo (Ruta)</label>
+                
                 <div>
-                    <label class="text-xs font-medium text-gray-500 mb-1 block">Círculo de fondo</label>
-                    <div class="flex gap-2 flex-wrap items-center">
-                        <button onclick="setCircleColor('none')" id="circ-none" class="w-8 h-8 rounded-full bg-gray-200 ring-2 ring-offset-2 ring-gray-400 transition-all hover:scale-110 text-[10px] font-bold text-gray-600 flex items-center justify-center">✕</button>
-                        <button onclick="setCircleColor('#3b82f6')" id="circ-blue" class="w-8 h-8 rounded-full bg-blue-500 ring-2 ring-offset-2 ring-transparent hover:ring-blue-500 transition-all hover:scale-110"></button>
-                        <button onclick="setCircleColor('#ef4444')" id="circ-red" class="w-8 h-8 rounded-full bg-red-500 ring-2 ring-offset-2 ring-transparent hover:ring-red-500 transition-all hover:scale-110"></button>
-                        <button onclick="setCircleColor('#10b981')" id="circ-green" class="w-8 h-8 rounded-full bg-green-500 ring-2 ring-offset-2 ring-transparent hover:ring-green-500 transition-all hover:scale-110"></button>
-                        <button onclick="setCircleColor('#f59e0b')" id="circ-amber" class="w-8 h-8 rounded-full bg-amber-500 ring-2 ring-offset-2 ring-transparent hover:ring-amber-500 transition-all hover:scale-110"></button>
-                        <button onclick="setCircleColor('#8b5cf6')" id="circ-purple" class="w-8 h-8 rounded-full bg-purple-500 ring-2 ring-offset-2 ring-transparent hover:ring-purple-500 transition-all hover:scale-110"></button>
-                        <button onclick="setCircleColor('#ec4899')" id="circ-pink" class="w-8 h-8 rounded-full bg-pink-500 ring-2 ring-offset-2 ring-transparent hover:ring-pink-500 transition-all hover:scale-110"></button>
-                        <input type="color" id="custom-circle-color" onchange="setCircleColor(this.value)" class="w-8 h-8 rounded-full overflow-hidden cursor-pointer border-0 p-0" value="#3b82f6">
+                    <label class="text-xs font-medium text-gray-500 mb-1.5 block">Color del trazo</label>
+                    <div class="flex gap-2 items-center flex-wrap">
+                        <button onclick="setRouteColor('#ef4444')" class="w-7 h-7 rounded-full bg-red-500 ring-2 ring-offset-1 ring-red-500 hover:scale-110 transition-transform"></button>
+                        <button onclick="setRouteColor('#3b82f6')" class="w-7 h-7 rounded-full bg-blue-500 ring-2 ring-offset-1 ring-transparent hover:ring-blue-500 hover:scale-110 transition-transform"></button>
+                        <button onclick="setRouteColor('#10b981')" class="w-7 h-7 rounded-full bg-green-500 ring-2 ring-offset-1 ring-transparent hover:ring-green-500 hover:scale-110 transition-transform"></button>
+                        <button onclick="setRouteColor('#f59e0b')" class="w-7 h-7 rounded-full bg-amber-500 ring-2 ring-offset-1 ring-transparent hover:ring-amber-500 hover:scale-110 transition-transform"></button>
+                        <button onclick="setRouteColor('#8b5cf6')" class="w-7 h-7 rounded-full bg-purple-500 ring-2 ring-offset-1 ring-transparent hover:ring-purple-500 hover:scale-110 transition-transform"></button>
+                        <button onclick="setRouteColor('#ec4899')" class="w-7 h-7 rounded-full bg-pink-500 ring-2 ring-offset-1 ring-transparent hover:ring-pink-500 hover:scale-110 transition-transform"></button>
+                        <input type="color" id="custom-color" onchange="setRouteColor(this.value)" class="w-7 h-7 rounded-full overflow-hidden cursor-pointer border-0 p-0" value="#ef4444" title="Color personalizado">
                     </div>
                 </div>
-                <div>
-                    <label class="text-xs font-medium text-gray-500 mb-1 block">O imagen personalizada (URL)</label>
-                    <input type="text" id="custom-vehicle" placeholder="https://..." onchange="setCustomVehicle(this.value)" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
-                </div>
-            </div>
-        </div>
 
-        <div class="border-t border-gray-200 pt-4">
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Visibilidad</h2>
-            <div class="space-y-2">
-                <label class="flex items-center gap-3 p-3 rounded-xl bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
-                    <input type="radio" name="visibility" value="all" checked onchange="setVisibility('all')" class="w-4 h-4 text-blue-600">
-                    <span class="text-sm">Mostrar todos los puntos</span>
-                </label>
-                <label class="flex items-center gap-3 p-3 rounded-xl bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
-                    <input type="radio" name="visibility" value="endpoints" onchange="setVisibility('endpoints')" class="w-4 h-4 text-blue-600">
-                    <span class="text-sm">Solo inicio y fin</span>
-                </label>
-                <label class="flex items-center gap-3 p-3 rounded-xl bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
-                    <input type="radio" name="visibility" value="none" onchange="setVisibility('none')" class="w-4 h-4 text-blue-600">
-                    <span class="text-sm">Ocultar todos (solo ruta)</span>
-                </label>
-                <label class="flex items-center gap-3 p-3 rounded-xl bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
-                    <input type="radio" name="visibility" value="traced" onchange="setVisibility('traced')" class="w-4 h-4 text-blue-600">
-                    <span class="text-sm">Solo ruta trazada (progresivo)</span>
-                </label>
-            </div>
-        </div>
-
-        <div class="border-t border-gray-200 pt-4">
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Overlay de Puntos</h2>
-            <div class="space-y-3">
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" id="show-point-overlay" onchange="updatePointOverlaySettings()" class="w-4 h-4 text-blue-600 rounded">
-                    <label for="show-point-overlay" class="text-sm text-gray-700">Mostrar texto/imagen al pasar</label>
-                </div>
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" id="pause-at-points" onchange="updatePointOverlaySettings()" class="w-4 h-4 text-blue-600 rounded">
-                    <label for="pause-at-points" class="text-sm text-gray-700">Pausar al llegar a cada punto</label>
-                </div>
                 <div>
-                    <label class="text-xs font-medium text-gray-500 mb-1 block">Posición del overlay</label>
-                    <select id="point-overlay-position" onchange="updatePointOverlaySettings()" class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="bottom">Normal (abajo)</option>
-                        <option value="center">Central</option>
+                    <div class="flex justify-between text-xs font-medium text-gray-600 mb-1">
+                        <span>Grosor del trazo</span>
+                        <span id="route-width-display" class="font-bold text-blue-600">6px</span>
+                    </div>
+                    <input type="range" id="route-width-slider" min="3" max="14" value="6" oninput="updateRouteWidth(this.value)">
+                </div>
+
+                <div>
+                    <label class="text-xs font-medium text-gray-500 mb-1.5 block">Modo de trazo durante el recorrido</label>
+                    <select id="route-render-mode" onchange="updateRenderMode(this.value)" class="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500">
+                        <option value="progressive-pure">✨ 100% Progresivo (Estilo TravelBoast - Un solo trazo)</option>
+                        <option value="progressive-faint">🌟 Guía tenue + Trazo progresivo vibrante</option>
+                        <option value="full">🛣️ Ruta completa fija</option>
                     </select>
                 </div>
             </div>
+
+            <!-- Círculo de fondo para el vehículo -->
+            <div class="space-y-2 bg-gray-50 rounded-2xl p-3 border border-gray-200/80">
+                <label class="text-xs font-bold text-gray-700 block">Círculo / Fondo del Vehículo</label>
+                <div class="flex gap-2 items-center flex-wrap">
+                    <button onclick="setCircleColor('none')" id="circ-none" class="w-7 h-7 rounded-full bg-gray-200 ring-2 ring-offset-1 ring-gray-400 text-[10px] font-black text-gray-600 flex items-center justify-center">✕</button>
+                    <button onclick="setCircleColor('#3b82f6')" id="circ-blue" class="w-7 h-7 rounded-full bg-blue-500 ring-2 ring-offset-1 ring-transparent hover:ring-blue-500 hover:scale-110 transition-transform"></button>
+                    <button onclick="setCircleColor('#ef4444')" id="circ-red" class="w-7 h-7 rounded-full bg-red-500 ring-2 ring-offset-1 ring-transparent hover:ring-red-500 hover:scale-110 transition-transform"></button>
+                    <button onclick="setCircleColor('#10b981')" id="circ-green" class="w-7 h-7 rounded-full bg-green-500 ring-2 ring-offset-1 ring-transparent hover:ring-green-500 hover:scale-110 transition-transform"></button>
+                    <button onclick="setCircleColor('#f59e0b')" id="circ-amber" class="w-7 h-7 rounded-full bg-amber-500 ring-2 ring-offset-1 ring-transparent hover:ring-amber-500 hover:scale-110 transition-transform"></button>
+                    <button onclick="setCircleColor('#8b5cf6')" id="circ-purple" class="w-7 h-7 rounded-full bg-purple-500 ring-2 ring-offset-1 ring-transparent hover:ring-purple-500 hover:scale-110 transition-transform"></button>
+                    <input type="color" id="custom-circle-color" onchange="setCircleColor(this.value)" class="w-7 h-7 rounded-full overflow-hidden cursor-pointer border-0 p-0" value="#3b82f6">
+                </div>
+            </div>
+
         </div>
 
-        <div class="border-t border-gray-200 pt-4">
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Overlay de Inicio</h2>
-            <div class="space-y-3">
-                <div class="flex items-center gap-2">
+        <!-- TAB 3: CÁMARA Y MARCOS -->
+        <div id="tab-content-camera" class="space-y-4 hidden">
+            
+            <!-- Aspect Ratio Frames (Marcos para redes sociales) -->
+            <div class="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100 rounded-2xl p-3.5 space-y-3">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-extrabold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                        📐 Marco de Pantalla (Grabación)
+                    </label>
+                    <span class="text-[10px] bg-purple-200 text-purple-800 font-black px-2 py-0.5 rounded-full">Tecla M</span>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-1.5">
+                    <button onclick="setFrameMode('free')" id="frame-btn-free" class="p-2 bg-purple-600 text-white rounded-xl text-xs font-bold text-center transition-all shadow-sm">
+                        🖥️ Libre / Full
+                    </button>
+                    <button onclick="setFrameMode('9-16')" id="frame-btn-9-16" class="p-2 bg-white text-gray-700 hover:bg-purple-100 rounded-xl text-xs font-bold text-center border border-purple-200 transition-all">
+                        📱 9:16 (TikTok / Reels)
+                    </button>
+                    <button onclick="setFrameMode('1-1')" id="frame-btn-1-1" class="p-2 bg-white text-gray-700 hover:bg-purple-100 rounded-xl text-xs font-bold text-center border border-purple-200 transition-all">
+                        ⏹️ 1:1 (Instagram Post)
+                    </button>
+                    <button onclick="setFrameMode('16-9')" id="frame-btn-16-9" class="p-2 bg-white text-gray-700 hover:bg-purple-100 rounded-xl text-xs font-bold text-center border border-purple-200 transition-all">
+                        🎬 16:9 (YouTube)
+                    </button>
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-[11px] font-medium text-gray-600 mb-1">
+                        <span>Oscurecimiento de bordes fuera del marco</span>
+                        <span id="frame-opacity-display" class="font-bold text-purple-700">70%</span>
+                    </div>
+                    <input type="range" id="frame-opacity-slider" min="20" max="100" value="70" oninput="updateFrameOpacity(this.value)">
+                </div>
+            </div>
+
+            <!-- Camera Movement & Smoothing -->
+            <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200/80 space-y-3">
+                <label class="text-xs font-extrabold text-gray-700 uppercase tracking-wider block">Estabilidad y Suavizado de Cámara</label>
+                
+                <div>
+                    <label class="text-xs font-medium text-gray-500 mb-1 block">Modo de seguimiento</label>
+                    <select id="camera-mode-select" onchange="updateCameraSettings()" class="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500">
+                        <option value="cinematic-ahead">🛸 Cinemático con anticipación (Mira hacia adelante)</option>
+                        <option value="cinematic-smooth">🎥 Cinemático amortiguado (Suavizado fluido)</option>
+                        <option value="centered">🎯 Centrado directo en vehículo</option>
+                        <option value="static">🗺️ Vista panorámica estática (Sin mover mapa)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-xs font-medium text-gray-600 mb-1">
+                        <span>Suavidad de la cámara (Interpolación)</span>
+                        <span id="cam-smooth-display" class="font-bold text-blue-600">Alta (Fluida)</span>
+                    </div>
+                    <input type="range" id="cam-smooth-slider" min="1" max="10" value="7" oninput="updateCameraSmoothness(this.value)">
+                    <div class="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>Rápida</span><span>Ultra suave</span></div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-xs font-medium text-gray-600 mb-1">
+                        <span>Duración total del recorrido</span>
+                        <span id="duration-display" class="font-bold text-blue-600">35s</span>
+                    </div>
+                    <input type="range" id="duration-slider" min="5" max="180" value="35" oninput="updateDuration(this.value)">
+                    <div class="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>5s (Rápido)</span><span>3 min</span></div>
+                </div>
+            </div>
+
+            <!-- Distance Badge (TravelBoast Style 81 km) -->
+            <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200/80 space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <label for="show-distance-badge" class="text-xs font-bold text-gray-700">🏷️ Cartel de Distancia (Estilo TravelBoast "81 km")</label>
+                    <input type="checkbox" id="show-distance-badge" checked onchange="updateDistanceBadgeSettings()" class="w-4 h-4 text-blue-600 rounded">
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Posición</label>
+                        <select id="distance-badge-position" onchange="updateDistanceBadgeSettings()" class="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-xl">
+                            <option value="vehicle">Acompañando al vehículo</option>
+                            <option value="fixed-bottom">Fijo inferior central</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Unidad</label>
+                        <select id="distance-badge-unit" onchange="updateDistanceBadgeSettings()" class="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-xl">
+                            <option value="km">Kilómetros (km)</option>
+                            <option value="mi">Millas (mi)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map Tile Layer Selector -->
+            <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200/80 space-y-2">
+                <label class="text-xs font-extrabold text-gray-700 uppercase tracking-wider block">Estilo visual del Mapa</label>
+                <select id="map-tile-select" onchange="setMapTile(this.value)" class="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500">
+                    <option value="positron" selected>✨ TravelBoast Minimal (CartoDB Positron)</option>
+                    <option value="voyager">🗺️ CartoDB Voyager (Viajero)</option>
+                    <option value="osm">📍 OpenStreetMap Clásico</option>
+                    <option value="satellite">🛰️ Satélite HD (Esri)</option>
+                    <option value="dark">🌙 Dark Matter (Modo Noche)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- TAB 4: OVERLAYS -->
+        <div id="tab-content-overlays" class="space-y-4 hidden">
+            
+            <!-- Global Overlay Behavior -->
+            <div class="bg-blue-50/70 border border-blue-100 rounded-2xl p-3 space-y-2">
+                <span class="text-xs font-bold text-blue-900 block">💡 Control Individual de Hitos</span>
+                <p class="text-[11px] text-blue-700 leading-snug">
+                    Cada punto de tu recorrido tiene su propio botón <b>[👁️ Overlay]</b> y <b>[⏸️ Pausa]</b> en la pestaña <b>Ruta</b> para decidir exactamente dónde detenerse o mostrar tarjetas.
+                </p>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Ubicación del cartel de punto</label>
+                    <select id="point-overlay-position" onchange="updateOverlaySettings()" class="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-xl text-xs">
+                        <option value="bottom">Inferior Flotante</option>
+                        <option value="center">Centro de la Pantalla</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Overlay de Inicio -->
+            <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200/80 space-y-3">
+                <div class="flex items-center justify-between">
+                    <label for="show-start-overlay" class="text-xs font-extrabold text-gray-800 uppercase tracking-wider">Cartel de Inicio (Intro)</label>
                     <input type="checkbox" id="show-start-overlay" onchange="updateStartOverlaySettings()" class="w-4 h-4 text-blue-600 rounded">
-                    <label for="show-start-overlay" class="text-sm text-gray-700">Mostrar overlay al inicio</label>
                 </div>
-                <div>
-                    <label class="text-xs font-medium text-gray-500 mb-1 block">Título</label>
-                    <input type="text" id="start-title" placeholder="Título de inicio..." onchange="updateStartOverlaySettings()" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div>
-                    <label class="text-xs font-medium text-gray-500 mb-1 block">Texto</label>
-                    <textarea id="start-text" rows="2" placeholder="Descripción..." onchange="updateStartOverlaySettings()" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
-                </div>
-                <div>
-                    <label class="text-xs font-medium text-gray-500 mb-1 block">URL de imagen</label>
-                    <input type="text" id="start-image" placeholder="https://..." onchange="updateStartOverlaySettings()" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div>
-                    <div class="flex justify-between mb-1">
-                        <label class="text-xs font-medium text-gray-500">Duración del overlay</label>
-                        <span id="start-duration-display" class="text-xs font-bold text-blue-600">3s</span>
+                
+                <div class="space-y-2">
+                    <input type="text" id="start-title" placeholder="Título de inicio (ej: ¡Comienza el viaje!)..." onchange="updateStartOverlaySettings()" class="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs">
+                    <textarea id="start-text" rows="2" placeholder="Descripción inicial del recorrido..." onchange="updateStartOverlaySettings()" class="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs resize-none"></textarea>
+                    
+                    <div class="flex gap-2 items-center">
+                        <button onclick="document.getElementById('start-image-file').click()" class="py-1.5 px-3 bg-white border border-gray-300 hover:bg-gray-100 rounded-xl text-xs font-bold text-gray-700 shadow-sm flex items-center gap-1">
+                            📁 <span>Subir foto</span>
+                        </button>
+                        <input type="file" id="start-image-file" accept="image/*" class="hidden" onchange="handleStartImageFile(this)">
+                        <input type="text" id="start-image" placeholder="O URL de imagen..." onchange="updateStartOverlaySettings()" class="flex-1 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs">
                     </div>
-                    <input type="range" id="start-duration" min="1" max="15" value="3" oninput="document.getElementById('start-duration-display').textContent = this.value + 's'; updateStartOverlaySettings();">
+
+                    <div>
+                        <div class="flex justify-between text-[11px] font-medium text-gray-600 mb-1">
+                            <span>Duración en pantalla</span>
+                            <span id="start-duration-display" class="font-bold text-blue-600">3s</span>
+                        </div>
+                        <input type="range" id="start-duration" min="1" max="10" value="3" oninput="document.getElementById('start-duration-display').textContent = this.value + 's'; updateStartOverlaySettings();">
+                    </div>
                 </div>
             </div>
+
+            <!-- Overlay de Final -->
+            <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200/80 space-y-3">
+                <div class="flex items-center justify-between">
+                    <label for="show-end-overlay" class="text-xs font-extrabold text-gray-800 uppercase tracking-wider">Cartel de Llegada (Outro)</label>
+                    <input type="checkbox" id="show-end-overlay" onchange="updateEndOverlaySettings()" class="w-4 h-4 text-blue-600 rounded">
+                </div>
+                
+                <div class="space-y-2">
+                    <input type="text" id="end-title" placeholder="Título final (ej: ¡Destino Alcanzado!)..." onchange="updateEndOverlaySettings()" class="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs">
+                    <textarea id="end-text" rows="2" placeholder="Resumen del destino..." onchange="updateEndOverlaySettings()" class="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs resize-none"></textarea>
+                    
+                    <div class="flex gap-2 items-center">
+                        <button onclick="document.getElementById('end-image-file').click()" class="py-1.5 px-3 bg-white border border-gray-300 hover:bg-gray-100 rounded-xl text-xs font-bold text-gray-700 shadow-sm flex items-center gap-1">
+                            📁 <span>Subir foto</span>
+                        </button>
+                        <input type="file" id="end-image-file" accept="image/*" class="hidden" onchange="handleEndImageFile(this)">
+                        <input type="text" id="end-image" placeholder="O URL de imagen..." onchange="updateEndOverlaySettings()" class="flex-1 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs">
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-[11px] font-medium text-gray-600 mb-1">
+                            <span>Duración en pantalla</span>
+                            <span id="end-duration-display" class="font-bold text-blue-600">3s</span>
+                        </div>
+                        <input type="range" id="end-duration" min="1" max="10" value="3" oninput="document.getElementById('end-duration-display').textContent = this.value + 's'; updateEndOverlaySettings();">
+                    </div>
+                </div>
+            </div>
+
         </div>
 
-        <div class="border-t border-gray-200 pt-4">
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Overlay de Final</h2>
-            <div class="space-y-3">
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" id="show-end-overlay" onchange="updateEndOverlaySettings()" class="w-4 h-4 text-blue-600 rounded">
-                    <label for="show-end-overlay" class="text-sm text-gray-700">Mostrar overlay al finalizar</label>
-                </div>
-                <div>
-                    <label class="text-xs font-medium text-gray-500 mb-1 block">Título</label>
-                    <input type="text" id="end-title" placeholder="Título de finalización..." onchange="updateEndOverlaySettings()" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div>
-                    <label class="text-xs font-medium text-gray-500 mb-1 block">Texto</label>
-                    <textarea id="end-text" rows="2" placeholder="Descripción..." onchange="updateEndOverlaySettings()" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
-                </div>
-                <div>
-                    <label class="text-xs font-medium text-gray-500 mb-1 block">URL de imagen</label>
-                    <input type="text" id="end-image" placeholder="https://..." onchange="updateEndOverlaySettings()" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div>
-                    <div class="flex justify-between mb-1">
-                        <label class="text-xs font-medium text-gray-500">Duración del overlay</label>
-                        <span id="end-duration-display" class="text-xs font-bold text-blue-600">3s</span>
-                    </div>
-                    <input type="range" id="end-duration" min="1" max="15" value="3" oninput="document.getElementById('end-duration-display').textContent = this.value + 's'; updateEndOverlaySettings();">
-                </div>
-            </div>
-        </div>
     </div>
 
-    <div class="p-5 border-t border-gray-200 bg-gray-50/50 space-y-2">
-        <button id="play-btn" onclick="toggleAnimation()" disabled class="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/30 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-            <span id="play-icon">▶️</span>
-            <span id="play-text">Iniciar Recorrido</span>
+    <!-- Bottom Action Dock -->
+    <div class="p-4 border-t border-gray-200/60 bg-white/70 space-y-2.5">
+        <button id="play-btn" onclick="toggleAnimation()" disabled class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            <span id="play-icon" class="text-base">▶</span>
+            <span id="play-text">Iniciar Recorrido (Espacio)</span>
         </button>
-        <div class="flex gap-2">
-            <button onclick="clearAll()" class="flex-1 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all">🗑️ Limpiar</button>
-            <button onclick="fitBounds()" class="flex-1 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-all">🔍 Centrar</button>
+
+        <div class="flex items-center justify-between px-1">
+            <label class="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                <input type="checkbox" id="auto-hide-panel" checked class="w-3.5 h-3.5 text-blue-600 rounded">
+                <span>Ocultar cajón al iniciar</span>
+            </label>
+            <div class="flex gap-2">
+                <button onclick="clearAll()" class="text-xs text-gray-500 hover:text-red-600 font-bold transition-colors">🗑️ Limpiar</button>
+                <button onclick="fitBounds()" class="text-xs text-blue-600 hover:text-blue-700 font-bold transition-colors">🔍 Centrar</button>
+            </div>
         </div>
     </div>
 </div>
 
-<div id="edit-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[1000] hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 transform transition-all scale-95 opacity-0" id="edit-modal-content">
+<!-- Edit Point Modal with Individual Settings -->
+<div id="edit-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[1000] hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 transform transition-all scale-95 opacity-0" id="edit-modal-content">
         <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-bold text-gray-800">Editar Punto <span id="edit-point-num" class="text-blue-600"></span></h3>
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black text-sm" id="edit-modal-badge">1</div>
+                <h3 class="text-base font-extrabold text-gray-900">Editar Punto <span id="edit-point-num" class="text-blue-600"></span></h3>
+            </div>
             <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
+
         <div class="space-y-4">
             <div>
-                <label class="text-xs font-semibold text-gray-500 uppercase">Título</label>
-                <input type="text" id="edit-title" class="w-full mt-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Título del punto...">
+                <label class="text-[11px] font-bold text-gray-500 uppercase block mb-1">Título o Nombre del Lugar</label>
+                <input type="text" id="edit-title" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: Parada Congreso, Hotel, Plaza...">
             </div>
+
             <div>
-                <label class="text-xs font-semibold text-gray-500 uppercase">Texto a mostrar</label>
-                <textarea id="edit-text" rows="3" class="w-full mt-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Describe este lugar..."></textarea>
+                <label class="text-[11px] font-bold text-gray-500 uppercase block mb-1">Descripción / Mensaje</label>
+                <textarea id="edit-text" rows="2" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Texto que aparecerá al llegar aquí..."></textarea>
             </div>
+
+            <!-- Image local upload or URL -->
             <div>
-                <label class="text-xs font-semibold text-gray-500 uppercase">URL de imagen</label>
-                <input type="text" id="edit-image" class="w-full mt-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://...">
-            </div>
-            <div>
-                <div class="flex justify-between mb-1">
-                    <label class="text-xs font-semibold text-gray-500 uppercase">Duración al pasar</label>
-                    <span id="edit-duration-display" class="text-xs font-bold text-blue-600">3s</span>
+                <label class="text-[11px] font-bold text-gray-500 uppercase block mb-1">Foto o Imagen del Punto</label>
+                <div class="flex gap-2 items-center">
+                    <button onclick="document.getElementById('edit-image-file').click()" class="py-2 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold border border-gray-200 flex items-center gap-1 shadow-sm">
+                        📁 <span>Subir archivo</span>
+                    </button>
+                    <input type="file" id="edit-image-file" accept="image/*" class="hidden" onchange="handlePointImageFile(this)">
+                    <input type="text" id="edit-image" class="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs" placeholder="O pega URL de imagen...">
                 </div>
-                <input type="range" id="edit-duration" min="1" max="10" value="3" oninput="document.getElementById('edit-duration-display').textContent = this.value + 's'">
+                <div id="edit-image-preview-container" class="mt-2 hidden">
+                    <img id="edit-image-preview" src="" class="h-20 w-full object-cover rounded-xl border border-gray-200">
+                    <button onclick="clearPointImage()" class="text-[10px] text-red-500 font-bold mt-1">✕ Quitar foto</button>
+                </div>
+            </div>
+
+            <!-- Individual Toggles (Overlay & Pause) -->
+            <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200 space-y-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-bold text-gray-800">Mostrar cartel al pasar</div>
+                        <div class="text-[10px] text-gray-500">Aparece la tarjeta con foto y texto</div>
+                    </div>
+                    <input type="checkbox" id="edit-show-overlay" class="w-4 h-4 text-blue-600 rounded">
+                </div>
+
+                <div class="flex items-center justify-between border-t border-gray-200/80 pt-2">
+                    <div>
+                        <div class="text-xs font-bold text-gray-800">Pausar el vehículo aquí</div>
+                        <div class="text-[10px] text-gray-500">Se detiene temporalmente la animación</div>
+                    </div>
+                    <input type="checkbox" id="edit-pause-here" class="w-4 h-4 text-blue-600 rounded">
+                </div>
+
+                <div id="edit-pause-duration-row">
+                    <div class="flex justify-between text-[11px] font-medium text-gray-600 mb-1">
+                        <span>Tiempo de pausa</span>
+                        <span id="edit-duration-display" class="font-bold text-blue-600">3s</span>
+                    </div>
+                    <input type="range" id="edit-duration" min="1" max="10" value="3" oninput="document.getElementById('edit-duration-display').textContent = this.value + 's'">
+                </div>
             </div>
         </div>
-        <div class="flex gap-2 mt-6">
-            <button onclick="savePointEdit()" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors">Guardar</button>
-            <button onclick="deletePointEdit()" class="px-4 py-2.5 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 transition-colors">Eliminar</button>
+
+        <div class="flex gap-2 mt-5">
+            <button onclick="savePointEdit()" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 shadow-md transition-colors">
+                Guardar Cambios
+            </button>
+            <button onclick="deletePointEdit()" class="px-4 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors">
+                Eliminar
+            </button>
         </div>
     </div>
 </div>
 
-<div id="progress-bar" class="fixed bottom-0 left-0 right-0 h-1.5 bg-gray-200 z-[60] hidden">
-    <div id="progress-fill" class="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-100" style="width: 0%"></div>
+<!-- Bottom Progress Bar -->
+<div id="progress-bar" class="fixed bottom-0 left-0 right-0 h-2 bg-black/20 z-[60] hidden">
+    <div id="progress-fill" class="h-full bg-gradient-to-r from-red-500 via-orange-500 to-yellow-400 transition-all duration-75" style="width: 0%"></div>
 </div>
 
 <script>
+/**
+ * OPENBOAST - ADVANCED TRAVELBOAST-STYLE ROUTE ANIMATOR
+ */
 
+// Core State
 let map;
+let currentTileLayer;
 let points = [];
-let routeLines = [];
-let routeSegments = [];
+let routeLines = [];        // Static background route lines (when not purely progressive)
+let routeSegments = [];     // Raw GPS coordinate arrays per segment
 let vehicleMarker = null;
-let routeTracedLine = null;
+let progressiveTrail = null; // Single progressive trail line left behind by vehicle
 let isPlaying = false;
 let animationId = null;
 let currentMode = 'navigate';
 let editingPointId = null;
 let panelVisible = true;
 
+// Active settings
 let settings = {
-    routeColor: '#3b82f6',
-    totalDuration: 45,
-    vehicle: 'bus',
+    // Styling & Vehicle
+    routeColor: '#ef4444',
+    routeWidth: 6,
+    routeRenderMode: 'progressive-pure', // 'progressive-pure', 'progressive-faint', 'full'
+    totalDuration: 35,
+    vehicle: 'van',
+    vehicleSize: 42,
     customVehicleUrl: '',
     customText: '',
-    visibility: 'all',
     rotateVehicle: true,
-    showEmoji: true,
+    vehicleShadow: true,
     circleColor: 'none',
-    showPointOverlay: false,
-    pauseAtPoints: false,
+
+    // Camera & Aspect Ratio
+    cameraMode: 'cinematic-ahead', // 'cinematic-ahead', 'cinematic-smooth', 'centered', 'static'
+    cameraSmoothness: 7, // 1 to 10
+    frameMode: 'free', // 'free', '9-16', '1-1', '16-9'
+    frameOpacity: 70,
+    mapTile: 'positron',
+
+    // Distance Badge
+    showDistanceBadge: true,
+    distanceBadgePosition: 'vehicle', // 'vehicle', 'fixed-bottom'
+    distanceBadgeUnit: 'km',
+
+    // Overlays
     pointOverlayPosition: 'bottom',
+    autoHidePanel: true,
     showStartOverlay: false,
     startTitle: '',
     startText: '',
@@ -452,50 +843,1522 @@ let settings = {
     endTitle: '',
     endText: '',
     endImage: '',
-    endDuration: 3,
-    cameraFollowVehicle: true
+    endDuration: 3
 };
 
-let vehicleIcons = { bus: '🚌', colectivo: '🚍', car: '🚗' };
+// Lines & Branches library
 let linesData = {};
 let currentLineId = null;
 let currentBranchId = null;
 
+// Tile layers definitions
+const tileLayers = {
+    positron: {
+        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+        attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+    },
+    voyager: {
+        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+    },
+    osm: {
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '&copy; OpenStreetMap'
+    },
+    satellite: {
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: '&copy; Esri World Imagery'
+    },
+    dark: {
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        attribution: '&copy; CARTO Dark Matter'
+    }
+};
+
+// TravelBoast High-Quality Vector SVGs
+const vehicleSVGs = {
+    van: `<svg viewBox="0 0 100 180" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <rect x="18" y="10" width="64" height="160" rx="20" fill="#f1f5f9" stroke="#94a3b8" stroke-width="3"/>
+        <rect x="22" y="32" width="56" height="24" rx="6" fill="#1e293b"/>
+        <rect x="22" y="65" width="56" height="70" rx="4" fill="#e2e8f0"/>
+        <line x1="50" y1="65" x2="50" y2="135" stroke="#94a3b8" stroke-width="2"/>
+        <rect x="22" y="142" width="56" height="18" rx="4" fill="#1e293b"/>
+        <!-- Headlights & Taillights -->
+        <circle cx="28" cy="14" r="5" fill="#fef08a"/>
+        <circle cx="72" cy="14" r="5" fill="#fef08a"/>
+        <rect x="24" y="165" width="10" height="4" rx="2" fill="#ef4444"/>
+        <rect x="66" y="165" width="10" height="4" rx="2" fill="#ef4444"/>
+        <!-- Mirrors -->
+        <rect x="10" y="38" width="8" height="12" rx="3" fill="#64748b"/>
+        <rect x="82" y="38" width="8" height="12" rx="3" fill="#64748b"/>
+    </svg>`,
+
+    bus: `<svg viewBox="0 0 100 220" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <rect x="15" y="8" width="70" height="204" rx="16" fill="#2563eb" stroke="#1d4ed8" stroke-width="3"/>
+        <!-- Roof A/C & Vents -->
+        <rect x="25" y="60" width="50" height="70" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+        <line x1="32" y1="80" x2="68" y2="80" stroke="#94a3b8" stroke-width="2"/>
+        <line x1="32" y1="95" x2="68" y2="95" stroke="#94a3b8" stroke-width="2"/>
+        <line x1="32" y1="110" x2="68" y2="110" stroke="#94a3b8" stroke-width="2"/>
+        <!-- Front Windshield -->
+        <rect x="20" y="16" width="60" height="30" rx="6" fill="#0f172a"/>
+        <!-- Rear Window -->
+        <rect x="20" y="185" width="60" height="16" rx="4" fill="#0f172a"/>
+        <!-- Side Windows -->
+        <rect x="16" y="55" width="4" height="120" fill="#0f172a"/>
+        <rect x="80" y="55" width="4" height="120" fill="#0f172a"/>
+        <!-- Lights -->
+        <circle cx="26" cy="12" r="5" fill="#fef08a"/>
+        <circle cx="74" cy="12" r="5" fill="#fef08a"/>
+        <rect x="24" y="206" width="12" height="4" fill="#ef4444"/>
+        <rect x="64" y="206" width="12" height="4" fill="#ef4444"/>
+    </svg>`,
+
+    car: `<svg viewBox="0 0 100 170" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <rect x="20" y="10" width="60" height="150" rx="18" fill="#ef4444" stroke="#b91c1c" stroke-width="3"/>
+        <path d="M 26 50 L 74 50 L 68 85 L 32 85 Z" fill="#0f172a" opacity="0.9"/>
+        <rect x="30" y="90" width="40" height="28" rx="4" fill="#ffffff" opacity="0.3"/>
+        <path d="M 30 125 L 70 125 L 74 140 L 26 140 Z" fill="#0f172a" opacity="0.9"/>
+        <!-- Lights -->
+        <circle cx="28" cy="16" r="5" fill="#fef08a"/>
+        <circle cx="72" cy="16" r="5" fill="#fef08a"/>
+        <rect x="25" y="154" width="12" height="4" rx="2" fill="#991b1b"/>
+        <rect x="63" y="154" width="12" height="4" rx="2" fill="#991b1b"/>
+        <!-- Mirrors -->
+        <rect x="12" y="52" width="8" height="10" rx="3" fill="#ef4444"/>
+        <rect x="80" y="52" width="8" height="10" rx="3" fill="#ef4444"/>
+    </svg>`,
+
+    plane: `<svg viewBox="0 0 200 200" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <!-- Wings -->
+        <path d="M 100 75 L 15 115 L 15 130 L 100 105 L 185 130 L 185 115 Z" fill="#e2e8f0" stroke="#94a3b8" stroke-width="2"/>
+        <!-- Tail -->
+        <path d="M 100 155 L 65 180 L 65 190 L 100 178 L 135 190 L 135 180 Z" fill="#cbd5e1"/>
+        <!-- Fuselage -->
+        <ellipse cx="100" cy="100" rx="14" ry="75" fill="#ffffff" stroke="#64748b" stroke-width="2"/>
+        <!-- Cockpit -->
+        <ellipse cx="100" cy="38" rx="7" ry="10" fill="#0284c7"/>
+        <!-- Turbines -->
+        <rect x="55" y="112" width="8" height="20" rx="4" fill="#64748b"/>
+        <rect x="137" y="112" width="8" height="20" rx="4" fill="#64748b"/>
+    </svg>`,
+
+    train: `<svg viewBox="0 0 100 240" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <rect x="20" y="10" width="60" height="220" rx="20" fill="#f8fafc" stroke="#475569" stroke-width="3"/>
+        <path d="M 20 40 Q 50 10 80 40 Z" fill="#0284c7"/>
+        <rect x="26" y="55" width="48" height="20" rx="5" fill="#0f172a"/>
+        <rect x="25" y="90" width="50" height="110" rx="6" fill="#e2e8f0"/>
+        <circle cx="50" cy="22" r="6" fill="#fef08a"/>
+    </svg>`,
+
+    moto: `<svg viewBox="0 0 80 160" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <rect x="36" y="10" width="8" height="36" rx="4" fill="#1e293b"/>
+        <rect x="20" y="38" width="40" height="6" rx="3" fill="#64748b"/>
+        <ellipse cx="40" cy="70" rx="12" ry="20" fill="#ef4444"/>
+        <circle cx="40" cy="70" r="10" fill="#f8fafc" stroke="#0f172a" stroke-width="2"/>
+        <rect x="36" y="110" width="8" height="40" rx="4" fill="#1e293b"/>
+    </svg>`,
+
+    ship: `<svg viewBox="0 0 100 200" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 50 10 Q 85 50 82 170 Q 50 190 18 170 Q 15 50 50 10 Z" fill="#f8fafc" stroke="#0284c7" stroke-width="3"/>
+        <rect x="32" y="60" width="36" height="70" rx="8" fill="#0284c7"/>
+        <rect x="38" y="75" width="24" height="40" rx="4" fill="#ffffff"/>
+    </svg>`,
+
+    bike: `<svg viewBox="0 0 80 160" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <rect x="37" y="10" width="6" height="35" rx="3" fill="#334155"/>
+        <rect x="22" y="35" width="36" height="4" rx="2" fill="#0f172a"/>
+        <line x1="40" y1="40" x2="40" y2="115" stroke="#10b981" stroke-width="5"/>
+        <rect x="37" y="110" width="6" height="40" rx="3" fill="#334155"/>
+        <ellipse cx="40" cy="80" rx="8" ry="12" fill="#334155"/>
+    </svg>`
+};
+
+const vehicleNames = {
+    van: 'Combi / Van',
+    bus: 'Colectivo / Bus',
+    car: 'Auto',
+    plane: 'Avión',
+    train: 'Tren',
+    moto: 'Moto',
+    ship: 'Barco',
+    bike: 'Bici'
+};
+
+// Initialize Application
 function init() {
-    map = L.map('map', { zoomControl: false }).setView([-34.6037, -58.3816], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap', maxZoom: 19
-    }).addTo(map);
+    // Leaflet map setup
+    map = L.map('map', { 
+        zoomControl: false, 
+        attributionControl: false 
+    }).setView([-34.6037, -58.3816], 13);
+
+    // Initial tile layer
+    setMapTile('positron');
+
+    // Controls
     L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    // Events
     map.on('click', onMapClick);
-    updatePlayButton();
+    map.on('dblclick', onMapDblClick);
+    map.doubleClickZoom.disable(); // Use double click for quick waypoint creation!
+
+    document.addEventListener('keydown', onKeyDown);
+    setupDragAndDrop();
+
+    // Render presets UI
+    renderVehiclePresets();
     loadFromStorage();
     populateLineSelect();
-    document.addEventListener('keydown', onKeyDown);
+    updatePlayButton();
+    updateVehiclePreview();
 }
 
+// Tile Switcher
+function setMapTile(tileKey) {
+    if (!tileLayers[tileKey]) tileKey = 'positron';
+    settings.mapTile = tileKey;
+    if (currentTileLayer) map.removeLayer(currentTileLayer);
+    
+    currentTileLayer = L.tileLayer(tileLayers[tileKey].url, {
+        attribution: tileLayers[tileKey].attribution,
+        maxZoom: 19
+    }).addTo(map);
+
+    const select = document.getElementById('map-tile-select');
+    if (select) select.value = tileKey;
+}
+
+// Keyboard shortcuts
 function onKeyDown(e) {
-    if (e.key === 'h' || e.key === 'H') togglePanel();
-}
+    // Don't trigger shortcuts if user is typing in an input or textarea
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        return;
+    }
 
-function togglePanel() {
-    panelVisible = !panelVisible;
-    const panel = document.getElementById('control-panel');
-    const toggle = document.getElementById('panel-toggle-btn');
-    if (panelVisible) {
-        panel.classList.remove('panel-hidden');
-        toggle.style.display = 'none';
-    } else {
-        panel.classList.add('panel-hidden');
-        toggle.style.display = 'flex';
+    if (e.code === 'Space') {
+        e.preventDefault();
+        toggleAnimation();
+    } else if (e.key === 'h' || e.key === 'H') {
+        togglePanel();
+    } else if (e.key === 'm' || e.key === 'M') {
+        cycleFrameMode();
+    } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
+    } else if (e.key === 'Escape') {
+        if (!document.getElementById('edit-modal').classList.contains('hidden')) {
+            closeEditModal();
+        } else if (isPlaying) {
+            stopAnimation();
+        }
     }
 }
 
+// Drawer Visibility Toggle
+function togglePanel() {
+    panelVisible = !panelVisible;
+    const panel = document.getElementById('control-panel');
+    const hudDrawerText = document.getElementById('hud-drawer-text');
+    
+    if (panelVisible) {
+        panel.classList.remove('panel-hidden');
+        if (hudDrawerText) hudDrawerText.textContent = 'Opciones';
+    } else {
+        panel.classList.add('panel-hidden');
+        if (hudDrawerText) hudDrawerText.textContent = 'Abrir menú';
+    }
+}
+
+// Tab Switching
+function setTab(tabName) {
+    const tabs = ['route', 'vehicle', 'camera', 'overlays'];
+    tabs.forEach(t => {
+        const content = document.getElementById('tab-content-' + t);
+        const btn = document.getElementById('tab-btn-' + t);
+        if (t === tabName) {
+            content.classList.remove('hidden');
+            btn.className = 'flex-1 py-1.5 px-2 text-xs font-bold rounded-xl bg-white shadow-sm text-blue-600 transition-all flex items-center justify-center gap-1';
+        } else {
+            content.classList.add('hidden');
+            btn.className = 'flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-gray-600 hover:text-gray-900 transition-all flex items-center justify-center gap-1';
+        }
+    });
+}
+
+// Aspect Ratio Framing (9:16, 1:1, 16:9, Free)
+function setFrameMode(mode) {
+    settings.frameMode = mode;
+    const container = document.getElementById('framing-container');
+    const box = document.getElementById('framing-box');
+    const label = document.getElementById('framing-label');
+    const hudText = document.getElementById('hud-frame-text');
+
+    const buttons = ['free', '9-16', '1-1', '16-9'];
+    buttons.forEach(b => {
+        const btn = document.getElementById('frame-btn-' + b);
+        if (!btn) return;
+        if (b === mode) {
+            btn.className = 'p-2 bg-purple-600 text-white rounded-xl text-xs font-bold text-center transition-all shadow-sm';
+        } else {
+            btn.className = 'p-2 bg-white text-gray-700 hover:bg-purple-100 rounded-xl text-xs font-bold text-center border border-purple-200 transition-all';
+        }
+    });
+
+    if (mode === 'free') {
+        container.classList.add('hidden');
+        if (hudText) hudText.textContent = 'Libre';
+        return;
+    }
+
+    container.classList.remove('hidden');
+    box.style.setProperty('--frame-opacity', settings.frameOpacity / 100);
+
+    const winW = window.innerWidth;
+    const winH = window.innerHeight;
+
+    if (mode === '9-16') {
+        // TikTok / Reels (vertical)
+        const targetHeight = winH * 0.94;
+        const targetWidth = targetHeight * (9 / 16);
+        box.style.width = Math.min(targetWidth, winW * 0.95) + 'px';
+        box.style.height = (Math.min(targetWidth, winW * 0.95) * (16 / 9)) + 'px';
+        label.textContent = '📱 9:16 (TikTok / Reels / Shorts)';
+        if (hudText) hudText.textContent = '9:16';
+    } else if (mode === '1-1') {
+        // Square (Instagram)
+        const size = Math.min(winW * 0.88, winH * 0.88);
+        box.style.width = size + 'px';
+        box.style.height = size + 'px';
+        label.textContent = '⏹️ 1:1 (Instagram Post)';
+        if (hudText) hudText.textContent = '1:1';
+    } else if (mode === '16-9') {
+        // YouTube / Widescreen
+        const targetWidth = winW * 0.92;
+        const targetHeight = targetWidth * (9 / 16);
+        box.style.width = targetWidth + 'px';
+        box.style.height = Math.min(targetHeight, winH * 0.92) + 'px';
+        label.textContent = '🎬 16:9 (YouTube)';
+        if (hudText) hudText.textContent = '16:9';
+    }
+}
+
+function cycleFrameMode() {
+    const modes = ['free', '9-16', '1-1', '16-9'];
+    const currentIdx = modes.indexOf(settings.frameMode);
+    const nextMode = modes[(currentIdx + 1) % modes.length];
+    setFrameMode(nextMode);
+}
+
+function updateFrameOpacity(val) {
+    settings.frameOpacity = parseInt(val);
+    document.getElementById('frame-opacity-display').textContent = val + '%';
+    const box = document.getElementById('framing-box');
+    if (box) {
+        box.style.setProperty('--frame-opacity', settings.frameOpacity / 100);
+        if (settings.frameOpacity >= 98) box.classList.add('frame-solid');
+        else box.classList.remove('frame-solid');
+    }
+}
+
+window.addEventListener('resize', () => {
+    if (settings.frameMode !== 'free') setFrameMode(settings.frameMode);
+});
+
+// Fullscreen
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+    }
+}
+
+// Vehicle Presets UI
+function renderVehiclePresets() {
+    const container = document.getElementById('vehicle-presets-container');
+    container.innerHTML = Object.entries(vehicleNames).map(([id, label]) => `
+        <button onclick="selectVehiclePreset('${id}')" id="vpreset-${id}" class="p-2 rounded-xl border-2 transition-all flex flex-col items-center justify-center gap-1 ${settings.vehicle === id && !settings.customVehicleUrl ? 'border-blue-600 bg-blue-50/80 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'}">
+            <div class="w-7 h-7 flex items-center justify-center">${vehicleSVGs[id] || '🚗'}</div>
+            <span class="text-[10px] font-bold text-gray-700 truncate w-full text-center">${label}</span>
+        </button>
+    `).join('');
+}
+
+function selectVehiclePreset(id) {
+    settings.vehicle = id;
+    settings.customVehicleUrl = '';
+    document.getElementById('custom-vehicle').value = '';
+    document.getElementById('vehicle-custom-clear-btn').classList.add('hidden');
+    renderVehiclePresets();
+    updateVehiclePreview();
+    if (vehicleMarker) updateVehicleMarkerIcon();
+}
+
+function updateVehiclePreview() {
+    const preview = document.getElementById('vehicle-preview-content');
+    if (settings.customVehicleUrl) {
+        preview.innerHTML = `<img src="${settings.customVehicleUrl}" class="w-full h-full object-contain">`;
+    } else if (vehicleSVGs[settings.vehicle]) {
+        preview.innerHTML = `<div class="w-10 h-10">${vehicleSVGs[settings.vehicle]}</div>`;
+    } else {
+        preview.innerHTML = '🚗';
+    }
+}
+
+// Custom vehicle file upload
+function handleVehicleImageFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        setCustomVehicleUrl(e.target.result);
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+}
+
+function setCustomVehicleUrl(url) {
+    if (!url) return;
+    settings.customVehicleUrl = url;
+    document.getElementById('custom-vehicle').value = url.startsWith('data:') ? '[Imagen local cargada]' : url;
+    document.getElementById('vehicle-custom-clear-btn').classList.remove('hidden');
+    renderVehiclePresets();
+    updateVehiclePreview();
+    if (vehicleMarker) updateVehicleMarkerIcon();
+}
+
+function clearCustomVehicle() {
+    settings.customVehicleUrl = '';
+    document.getElementById('custom-vehicle').value = '';
+    document.getElementById('vehicle-custom-clear-btn').classList.add('hidden');
+    renderVehiclePresets();
+    updateVehiclePreview();
+    if (vehicleMarker) updateVehicleMarkerIcon();
+}
+
+function updateVehicleSettings() {
+    settings.customText = document.getElementById('custom-text').value.trim();
+    settings.rotateVehicle = document.getElementById('rotate-vehicle').checked;
+    settings.vehicleShadow = document.getElementById('vehicle-shadow').checked;
+    if (vehicleMarker) updateVehicleMarkerIcon();
+}
+
+function updateVehicleSize(val) {
+    settings.vehicleSize = parseInt(val);
+    document.getElementById('veh-size-display').textContent = val + 'px';
+    if (vehicleMarker) updateVehicleMarkerIcon();
+}
+
+function setCircleColor(color) {
+    settings.circleColor = color;
+    if (vehicleMarker) updateVehicleMarkerIcon();
+}
+
+function setRouteColor(color) {
+    settings.routeColor = color;
+    document.getElementById('custom-color').value = color;
+    routeLines.forEach(l => l.setStyle({ color }));
+    if (progressiveTrail) progressiveTrail.setStyle({ color });
+}
+
+function updateRouteWidth(val) {
+    settings.routeWidth = parseInt(val);
+    document.getElementById('route-width-display').textContent = val + 'px';
+    routeLines.forEach(l => l.setStyle({ weight: settings.routeWidth }));
+    if (progressiveTrail) progressiveTrail.setStyle({ weight: settings.routeWidth });
+}
+
+function updateRenderMode(val) {
+    settings.routeRenderMode = val;
+    applyRouteRenderMode();
+}
+
+function applyRouteRenderMode() {
+    if (!isPlaying) {
+        routeLines.forEach(l => l.setStyle({ opacity: 0.85, weight: settings.routeWidth }));
+        return;
+    }
+    if (settings.routeRenderMode === 'progressive-pure') {
+        routeLines.forEach(l => l.setStyle({ opacity: 0 }));
+    } else if (settings.routeRenderMode === 'progressive-faint') {
+        routeLines.forEach(l => l.setStyle({ opacity: 0.25, dashArray: '6, 6', weight: Math.max(3, settings.routeWidth - 2) }));
+    } else {
+        routeLines.forEach(l => l.setStyle({ opacity: 0.85, weight: settings.routeWidth }));
+    }
+}
+
+// Distance Badge Settings
+function updateDistanceBadgeSettings() {
+    settings.showDistanceBadge = document.getElementById('show-distance-badge').checked;
+    settings.distanceBadgePosition = document.getElementById('distance-badge-position').value;
+    settings.distanceBadgeUnit = document.getElementById('distance-badge-unit').value;
+    const badge = document.getElementById('floating-km-badge');
+    if (!settings.showDistanceBadge && badge) badge.classList.add('hidden');
+}
+
+// Camera settings
+function updateCameraSettings() {
+    settings.cameraMode = document.getElementById('camera-mode-select').value;
+}
+
+function updateCameraSmoothness(val) {
+    settings.cameraSmoothness = parseInt(val);
+    const labels = ['Instantánea', 'Muy directa', 'Directa', 'Normal', 'Suave', 'Muy suave', 'Alta (Fluida)', 'Cinemática', 'Ultra fluida', 'Drone suave'];
+    document.getElementById('cam-smooth-display').textContent = labels[settings.cameraSmoothness - 1] || 'Suave';
+}
+
+function updateDuration(val) {
+    settings.totalDuration = parseInt(val);
+    document.getElementById('duration-display').textContent = val + 's';
+}
+
+// Overlays & Settings
+function updateOverlaySettings() {
+    settings.pointOverlayPosition = document.getElementById('point-overlay-position').value;
+}
+
+function updateStartOverlaySettings() {
+    settings.showStartOverlay = document.getElementById('show-start-overlay').checked;
+    settings.startTitle = document.getElementById('start-title').value;
+    settings.startText = document.getElementById('start-text').value;
+    settings.startImage = document.getElementById('start-image').value;
+    settings.startDuration = parseInt(document.getElementById('start-duration').value);
+}
+
+function handleStartImageFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        document.getElementById('start-image').value = e.target.result;
+        updateStartOverlaySettings();
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+}
+
+function updateEndOverlaySettings() {
+    settings.showEndOverlay = document.getElementById('show-end-overlay').checked;
+    settings.endTitle = document.getElementById('end-title').value;
+    settings.endText = document.getElementById('end-text').value;
+    settings.endImage = document.getElementById('end-image').value;
+    settings.endDuration = parseInt(document.getElementById('end-duration').value);
+}
+
+function handleEndImageFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        document.getElementById('end-image').value = e.target.result;
+        updateEndOverlaySettings();
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+}
+
+// Map Click Handlers
+function onMapClick(e) {
+    if (currentMode !== 'add') return;
+    addPoint(e.latlng.lat, e.latlng.lng);
+    setMode('navigate');
+}
+
+function onMapDblClick(e) {
+    addPoint(e.latlng.lat, e.latlng.lng);
+}
+
+function setMode(mode) {
+    currentMode = mode;
+    const navBtn = document.getElementById('mode-navigate');
+    const addBtn = document.getElementById('mode-add');
+    if (mode === 'navigate') {
+        navBtn.className = 'flex-1 py-2 rounded-xl text-xs font-bold bg-white text-gray-900 shadow-sm transition-all flex items-center justify-center gap-1.5';
+        addBtn.className = 'flex-1 py-2 rounded-xl text-xs font-bold text-gray-500 hover:text-gray-800 transition-all flex items-center justify-center gap-1.5';
+        map.getContainer().style.cursor = '';
+    } else {
+        addBtn.className = 'flex-1 py-2 rounded-xl text-xs font-bold bg-white text-gray-900 shadow-sm transition-all flex items-center justify-center gap-1.5';
+        navBtn.className = 'flex-1 py-2 rounded-xl text-xs font-bold text-gray-500 hover:text-gray-800 transition-all flex items-center justify-center gap-1.5';
+        map.getContainer().style.cursor = 'crosshair';
+    }
+}
+
+// Add Point Logic
+function addPoint(lat, lng, customProps) {
+    const id = Date.now() + Math.random();
+    const num = points.length + 1;
+    
+    const props = Object.assign({
+        title: '',
+        text: '',
+        image: '',
+        showOverlay: false,
+        pauseHere: false,
+        pauseDuration: 3
+    }, customProps);
+
+    const marker = L.marker([lat, lng], {
+        icon: createNumberIcon(num, num === 1 ? 'start' : 'normal'),
+        draggable: true,
+        riseOnHover: true
+    }).addTo(map);
+
+    marker.on('dragend', async (e) => {
+        const p = points.find(x => x.id === id);
+        if (p) {
+            p.lat = e.target.getLatLng().lat;
+            p.lng = e.target.getLatLng().lng;
+            await recalculateRoutes();
+            renderPointsList();
+        }
+    });
+
+    marker.on('click', () => openEditModal(id));
+
+    points.push({
+        id,
+        lat,
+        lng,
+        num,
+        marker,
+        title: props.title,
+        text: props.text,
+        image: props.image,
+        showOverlay: props.showOverlay,
+        pauseHere: props.pauseHere,
+        pauseDuration: props.pauseDuration
+    });
+
+    updatePointStyles();
+    renderPointsList();
+    recalculateRoutes();
+    updatePlayButton();
+}
+
+function createNumberIcon(num, type) {
+    const extraClass = type === 'start' ? 'start' : (type === 'end' ? 'end' : '');
+    return L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div class="point-marker ${extraClass}" data-num="${num}">${num}</div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+    });
+}
+
+function updatePointStyles() {
+    points.forEach((p, idx) => {
+        let type = 'normal';
+        if (idx === 0) type = 'start';
+        else if (idx === points.length - 1) type = 'end';
+
+        p.marker.setIcon(L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div class="point-marker ${type}" data-num="${idx + 1}">${idx + 1}</div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
+        }));
+    });
+}
+
+function renderPointsList() {
+    const container = document.getElementById('points-list');
+    document.getElementById('point-count').textContent = points.length;
+
+    if (points.length === 0) {
+        container.innerHTML = `<div class="text-center py-8 text-gray-400 text-xs italic bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+            Haz clic en "+ Agregar Punto" y luego en el mapa para comenzar, o arrastra un archivo GPX/KML.
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = points.map((p, idx) => `
+        <div class="bg-white border border-gray-200/70 rounded-2xl p-3 hover:shadow-md transition-all space-y-2">
+            <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-xl ${idx === 0 ? 'bg-emerald-500' : (idx === points.length - 1 ? 'bg-rose-500' : 'bg-blue-600')} text-white flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm">
+                    ${idx + 1}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-xs font-bold text-gray-800 truncate">${p.title || ('Hito #' + (idx + 1))}</div>
+                    <div class="text-[10px] text-gray-400 font-mono truncate">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</div>
+                </div>
+                <div class="flex gap-1 items-center">
+                    <button onclick="movePoint(${p.id}, -1)" class="p-1 hover:bg-gray-100 rounded-lg text-gray-400 text-xs" ${idx === 0 ? 'disabled style="opacity:0.2"' : ''} title="Subir">⬆️</button>
+                    <button onclick="movePoint(${p.id}, 1)" class="p-1 hover:bg-gray-100 rounded-lg text-gray-400 text-xs" ${idx === points.length - 1 ? 'disabled style="opacity:0.2"' : ''} title="Bajar">⬇️</button>
+                    <button onclick="openEditModal(${p.id})" class="p-1.5 hover:bg-blue-50 text-blue-600 rounded-lg text-xs" title="Editar punto">✏️</button>
+                    <button onclick="removePoint(${p.id})" class="p-1.5 hover:bg-red-50 text-red-600 rounded-lg text-xs" title="Eliminar punto">🗑️</button>
+                </div>
+            </div>
+
+            <!-- Quick Individual Toggles -->
+            <div class="flex items-center gap-2 pt-1 border-t border-gray-100">
+                <button onclick="togglePointOverlayQuick(${p.id})" class="px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${p.showOverlay ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'}">
+                    👁️ <span>Overlay: ${p.showOverlay ? 'SÍ' : 'NO'}</span>
+                </button>
+                <button onclick="togglePointPauseQuick(${p.id})" class="px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${p.pauseHere ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-400'}">
+                    ⏸️ <span>Pausa: ${p.pauseHere ? (p.pauseDuration + 's') : 'NO'}</span>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function togglePointOverlayQuick(id) {
+    const p = points.find(x => x.id === id);
+    if (p) {
+        p.showOverlay = !p.showOverlay;
+        renderPointsList();
+    }
+}
+
+function togglePointPauseQuick(id) {
+    const p = points.find(x => x.id === id);
+    if (p) {
+        p.pauseHere = !p.pauseHere;
+        renderPointsList();
+    }
+}
+
+function movePoint(id, dir) {
+    const idx = points.findIndex(p => p.id === id);
+    if (idx < 0) return;
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= points.length) return;
+    
+    [points[idx], points[newIdx]] = [points[newIdx], points[idx]];
+    points.forEach((p, i) => { p.num = i + 1; });
+    updatePointStyles();
+    renderPointsList();
+    recalculateRoutes();
+}
+
+function reverseRoute() {
+    if (points.length < 2) return;
+    points.reverse();
+    points.forEach((p, i) => { p.num = i + 1; });
+    updatePointStyles();
+    renderPointsList();
+    recalculateRoutes();
+}
+
+// Point Modal Edit Logic
+function openEditModal(id) {
+    editingPointId = id;
+    const p = points.find(x => x.id === id);
+    if (!p) return;
+
+    document.getElementById('edit-modal-badge').textContent = p.num;
+    document.getElementById('edit-point-num').textContent = '#' + p.num;
+    document.getElementById('edit-title').value = p.title || '';
+    document.getElementById('edit-text').value = p.text || '';
+    document.getElementById('edit-image').value = p.image || '';
+    document.getElementById('edit-show-overlay').checked = !!p.showOverlay;
+    document.getElementById('edit-pause-here').checked = !!p.pauseHere;
+    document.getElementById('edit-duration').value = p.pauseDuration || 3;
+    document.getElementById('edit-duration-display').textContent = (p.pauseDuration || 3) + 's';
+
+    const prevContainer = document.getElementById('edit-image-preview-container');
+    const prevImg = document.getElementById('edit-image-preview');
+    if (p.image) {
+        prevImg.src = p.image;
+        prevContainer.classList.remove('hidden');
+    } else {
+        prevContainer.classList.add('hidden');
+    }
+
+    const modal = document.getElementById('edit-modal');
+    const content = document.getElementById('edit-modal-content');
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+    }, 10);
+}
+
+function closeEditModal() {
+    const modal = document.getElementById('edit-modal');
+    const content = document.getElementById('edit-modal-content');
+    content.classList.remove('scale-100', 'opacity-100');
+    content.classList.add('scale-95', 'opacity-0');
+    setTimeout(() => modal.classList.add('hidden'), 200);
+    editingPointId = null;
+}
+
+function handlePointImageFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        document.getElementById('edit-image').value = e.target.result;
+        document.getElementById('edit-image-preview').src = e.target.result;
+        document.getElementById('edit-image-preview-container').classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+}
+
+function clearPointImage() {
+    document.getElementById('edit-image').value = '';
+    document.getElementById('edit-image-preview-container').classList.add('hidden');
+}
+
+function savePointEdit() {
+    if (!editingPointId) return;
+    const p = points.find(x => x.id === editingPointId);
+    if (p) {
+        p.title = document.getElementById('edit-title').value.trim();
+        p.text = document.getElementById('edit-text').value.trim();
+        p.image = document.getElementById('edit-image').value.trim();
+        p.showOverlay = document.getElementById('edit-show-overlay').checked;
+        p.pauseHere = document.getElementById('edit-pause-here').checked;
+        p.pauseDuration = parseInt(document.getElementById('edit-duration').value);
+    }
+    renderPointsList();
+    closeEditModal();
+}
+
+function deletePointEdit() {
+    if (!editingPointId) return;
+    removePoint(editingPointId);
+    closeEditModal();
+}
+
+function removePoint(id) {
+    const idx = points.findIndex(x => x.id === id);
+    if (idx < 0) return;
+    map.removeLayer(points[idx].marker);
+    points.splice(idx, 1);
+    points.forEach((p, i) => { p.num = i + 1; });
+    updatePointStyles();
+    renderPointsList();
+    recalculateRoutes();
+    updatePlayButton();
+}
+
+// Routing & Geometry Calculation (OSRM)
+async function recalculateRoutes() {
+    routeLines.forEach(l => map.removeLayer(l));
+    routeLines = [];
+    routeSegments = [];
+
+    if (points.length < 2) return;
+
+    for (let i = 0; i < points.length - 1; i++) {
+        const from = points[i];
+        const to = points[i + 1];
+
+        // If the point already contains high-definition imported GPS track geometry, use it directly!
+        if (from.customSegmentCoords && from.customSegmentCoords.length > 1) {
+            routeSegments.push(from.customSegmentCoords);
+            const polyline = L.polyline(from.customSegmentCoords, {
+                color: settings.routeColor,
+                weight: settings.routeWidth,
+                opacity: 0.85,
+                lineCap: 'round',
+                lineJoin: 'round'
+            }).addTo(map);
+            routeLines.push(polyline);
+            continue;
+        }
+
+        try {
+            const coords = await fetchRoute(from.lng, from.lat, to.lng, to.lat);
+            if (coords && coords.length > 0) {
+                routeSegments.push(coords);
+                const polyline = L.polyline(coords, {
+                    color: settings.routeColor,
+                    weight: settings.routeWidth,
+                    opacity: 0.85,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                }).addTo(map);
+                routeLines.push(polyline);
+            }
+        } catch (e) {
+            console.warn('OSRM error, falling back to straight line:', e);
+            const straight = [[from.lat, from.lng], [to.lat, to.lng]];
+            routeSegments.push(straight);
+            const polyline = L.polyline(straight, {
+                color: settings.routeColor,
+                weight: settings.routeWidth,
+                opacity: 0.6,
+                dashArray: '8, 8'
+            }).addTo(map);
+            routeLines.push(polyline);
+        }
+    }
+}
+
+async function fetchRoute(lon1, lat1, lon2, lat2) {
+    const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=polyline`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.routes && data.routes.length > 0) {
+        return decodePolyline(data.routes[0].geometry);
+    }
+    return null;
+}
+
+function decodePolyline(encoded) {
+    const poly = [];
+    let index = 0, lat = 0, lng = 0;
+    while (index < encoded.length) {
+        let b, shift = 0, result = 0;
+        do {
+            b = encoded.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+        } while (b >= 0x20);
+        const dlat = (result & 1) ? ~(result >> 1) : (result >> 1);
+        lat += dlat;
+
+        shift = 0; result = 0;
+        do {
+            b = encoded.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+        } while (b >= 0x20);
+        const dlng = (result & 1) ? ~(result >> 1) : (result >> 1);
+        lng += dlng;
+
+        poly.push([lat / 1e5, lng / 1e5]);
+    }
+    return poly;
+}
+
+// Vehicle Marker Icon Generator
+function buildVehicleHtml(angle) {
+    angle = angle || 0;
+    const size = settings.vehicleSize;
+    let content = '';
+
+    if (settings.customText) {
+        content = `<span class="font-black text-white" style="font-size:${Math.round(size * 0.35)}px;">${settings.customText}</span>`;
+    } else if (settings.customVehicleUrl) {
+        content = `<img src="${settings.customVehicleUrl}" style="width:${size}px;height:${size}px;object-fit:contain;">`;
+    } else if (vehicleSVGs[settings.vehicle]) {
+        content = `<div style="width:${size}px;height:${size}px;">${vehicleSVGs[settings.vehicle]}</div>`;
+    } else {
+        content = `<span style="font-size:${Math.round(size * 0.7)}px;">🚗</span>`;
+    }
+
+    const rotation = settings.rotateVehicle ? `transform: rotate(${angle + 90}deg);` : '';
+    const shadowStyle = settings.vehicleShadow ? `filter: drop-shadow(0 8px 14px rgba(0,0,0,0.45));` : '';
+
+    if (settings.circleColor !== 'none') {
+        return `<div class="vehicle-content" style="${shadowStyle}"><div class="vehicle-circle" style="background:${settings.circleColor};${rotation}">${content}</div></div>`;
+    }
+    return `<div class="vehicle-content" style="${rotation}${shadowStyle}">${content}</div>`;
+}
+
+function updateVehicleMarkerIcon(angle) {
+    if (!vehicleMarker) return;
+    const size = settings.vehicleSize;
+    vehicleMarker.setIcon(L.divIcon({
+        className: 'vehicle-marker',
+        html: buildVehicleHtml(angle),
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2]
+    }));
+}
+
+// Distance Calculation Helpers
+function haversine(a, b) {
+    const R = 6371; // km
+    const dLat = (b[0] - a[0]) * Math.PI / 180;
+    const dLon = (b[1] - a[1]) * Math.PI / 180;
+    const lat1 = a[0] * Math.PI / 180;
+    const lat2 = b[0] * Math.PI / 180;
+    const x = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2);
+    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+// ANIMATION ENGINE (100% Progressive, Camera Lerp Smoothing & Distance Badge)
+let animationState = {
+    startTime: null,
+    pausedTime: 0,
+    isPaused: false,
+    pauseUntil: 0,
+    totalDistance: 0,
+    pointDistances: [],
+    allCoords: [],
+    currentPointIndex: 0,
+    currentPos: null,
+    camLat: 0,
+    camLng: 0,
+    hasCameraInit: false
+};
+
+function updatePlayButton() {
+    const btn = document.getElementById('play-btn');
+    btn.disabled = points.length < 2;
+}
+
+async function toggleAnimation() {
+    if (isPlaying) {
+        stopAnimation();
+    } else {
+        if (points.length < 2) return;
+        startAnimation();
+    }
+}
+
+function stopAnimation() {
+    isPlaying = false;
+    if (animationId) cancelAnimationFrame(animationId);
+    
+    if (vehicleMarker) {
+        map.removeLayer(vehicleMarker);
+        vehicleMarker = null;
+    }
+    if (progressiveTrail) {
+        map.removeLayer(progressiveTrail);
+        progressiveTrail = null;
+    }
+
+    // Restore full route lines
+    applyRouteRenderMode();
+    routeLines.forEach(l => l.setStyle({ opacity: 0.85 }));
+
+    // Reset UI
+    document.getElementById('play-icon').textContent = '▶';
+    document.getElementById('play-text').textContent = 'Iniciar Recorrido (Espacio)';
+    document.getElementById('hud-play-icon').textContent = '▶';
+    document.getElementById('hud-play-text').textContent = 'Iniciar (Espacio)';
+    
+    document.getElementById('play-btn').className = 'w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2';
+    document.getElementById('hud-play-btn').className = 'flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-bold transition-all shadow-md';
+
+    hidePointOverlay();
+    document.getElementById('center-content').classList.remove('active');
+    document.getElementById('progress-bar').classList.add('hidden');
+    document.getElementById('progress-fill').style.width = '0%';
+    document.getElementById('floating-km-badge').classList.add('hidden');
+
+    updatePointStyles();
+}
+
+async function startAnimation() {
+    isPlaying = true;
+
+    // Check auto-hide panel setting
+    if (document.getElementById('auto-hide-panel').checked && panelVisible) {
+        togglePanel();
+    }
+
+    // Update play buttons
+    document.getElementById('play-icon').textContent = '⏹';
+    document.getElementById('play-text').textContent = 'Detener Recorrido';
+    document.getElementById('hud-play-icon').textContent = '⏹';
+    document.getElementById('hud-play-text').textContent = 'Detener';
+    
+    document.getElementById('play-btn').className = 'w-full py-3.5 bg-gradient-to-r from-rose-600 to-red-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-red-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2';
+    document.getElementById('hud-play-btn').className = 'flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 rounded-xl text-xs font-bold transition-all shadow-md';
+
+    document.getElementById('progress-bar').classList.remove('hidden');
+
+    // Compile entire route coordinates & cumulative distances
+    const allCoords = [];
+    const pointDistances = [0];
+    let totalDist = 0;
+
+    for (let seg of routeSegments) {
+        for (let i = 0; i < seg.length; i++) {
+            if (i === 0 && allCoords.length > 0) continue;
+            allCoords.push(seg[i]);
+            if (allCoords.length > 1) {
+                const d = haversine(allCoords[allCoords.length - 2], seg[i]);
+                totalDist += d;
+            }
+        }
+        pointDistances.push(totalDist);
+    }
+
+    if (allCoords.length < 2) {
+        stopAnimation();
+        return;
+    }
+
+    // Hide or dim static route lines according to mode
+    applyRouteRenderMode();
+
+    // Hide waypoints during progressive animation for clean cinematic look
+    if (settings.routeRenderMode === 'progressive-pure') {
+        points.forEach(p => map.removeLayer(p.marker));
+    }
+
+    // Create progressive trail polyline
+    progressiveTrail = L.polyline([allCoords[0]], {
+        color: settings.routeColor,
+        weight: settings.routeWidth,
+        opacity: 0.95,
+        lineCap: 'round',
+        lineJoin: 'round',
+        className: 'route-trail-glow'
+    }).addTo(map);
+
+    // Initial vehicle position
+    const size = settings.vehicleSize;
+    vehicleMarker = L.marker(allCoords[0], {
+        icon: L.divIcon({
+            className: 'vehicle-marker',
+            html: buildVehicleHtml(0),
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2]
+        }),
+        zIndexOffset: 1000
+    }).addTo(map);
+
+    // Setup distance badge
+    const badge = document.getElementById('floating-km-badge');
+    if (settings.showDistanceBadge) {
+        badge.classList.remove('hidden');
+        badge.textContent = '0 ' + settings.distanceBadgeUnit;
+        if (settings.distanceBadgePosition === 'fixed-bottom') {
+            badge.style.position = 'fixed';
+            badge.style.bottom = '24px';
+            badge.style.left = '50%';
+            badge.style.transform = 'translateX(-50%)';
+        } else {
+            badge.style.position = 'absolute';
+            badge.style.bottom = 'auto';
+            badge.style.transform = 'translate(-50%, 28px)';
+        }
+    }
+
+    // Animation state
+    animationState = {
+        startTime: performance.now(),
+        pausedTime: 0,
+        isPaused: false,
+        pauseUntil: 0,
+        totalDistance: totalDist,
+        pointDistances: pointDistances,
+        allCoords: allCoords,
+        currentPointIndex: 0,
+        currentPos: allCoords[0],
+        camLat: allCoords[0][0],
+        camLng: allCoords[0][1],
+        hasCameraInit: false
+    };
+
+    // Center camera initially
+    if (settings.cameraMode !== 'static') {
+        map.setView(allCoords[0], map.getZoom(), { animate: false });
+    }
+
+    // Handle Start Overlay
+    if (settings.showStartOverlay && (settings.startTitle || settings.startText || settings.startImage)) {
+        animationState.isPaused = true;
+        animationState.pauseStart = performance.now();
+        animationState.pauseUntil = animationState.pauseStart + settings.startDuration * 1000;
+        showCenterOverlay(settings.startTitle, settings.startText, settings.startImage);
+    }
+
+    // Start RAF
+    animateFrame();
+}
+
+function animateFrame() {
+    if (!isPlaying) return;
+
+    const now = performance.now();
+    const elapsed = (now - animationState.startTime) / 1000;
+    const effectiveElapsed = elapsed - animationState.pausedTime;
+
+    // Handle Pauses (Start overlay, point pauses, etc.)
+    if (animationState.isPaused) {
+        if (now < animationState.pauseUntil) {
+            animationId = requestAnimationFrame(animateFrame);
+            return;
+        }
+        animationState.isPaused = false;
+        animationState.pausedTime += (now - animationState.pauseStart) / 1000;
+        hidePointOverlay();
+        document.getElementById('center-content').classList.remove('active');
+    }
+
+    const progress = Math.min(effectiveElapsed / settings.totalDuration, 1);
+    document.getElementById('progress-fill').style.width = (progress * 100) + '%';
+    const targetDist = progress * animationState.totalDistance;
+
+    // Calculate current position along route coordinates
+    let traveled = 0;
+    let currentPos = animationState.allCoords[0];
+    let angle = 0;
+    let currentIdx = 0;
+
+    for (let i = 1; i < animationState.allCoords.length; i++) {
+        const from = animationState.allCoords[i - 1];
+        const to = animationState.allCoords[i];
+        const segDist = haversine(from, to);
+
+        if (traveled + segDist >= targetDist) {
+            const segProgress = (targetDist - traveled) / segDist;
+            currentPos = [
+                from[0] + (to[0] - from[0]) * segProgress,
+                from[1] + (to[1] - from[1]) * segProgress
+            ];
+            // Precise vehicle heading angle
+            angle = Math.atan2(to[1] - from[1], to[0] - from[0]) * 180 / Math.PI;
+            currentIdx = i;
+            break;
+        }
+        traveled += segDist;
+        currentPos = to;
+        currentIdx = i;
+    }
+
+    animationState.currentPos = currentPos;
+
+    // Update Vehicle Position & Heading
+    vehicleMarker.setLatLng(currentPos);
+    updateVehicleMarkerIcon(angle);
+
+    // 100% Progressive Trail: Single crisp continuous polyline
+    if (progressiveTrail) {
+        const trailCoords = animationState.allCoords.slice(0, currentIdx);
+        trailCoords.push(currentPos);
+        progressiveTrail.setLatLngs(trailCoords);
+    }
+
+    // Update Live Distance Badge
+    if (settings.showDistanceBadge) {
+        const badge = document.getElementById('floating-km-badge');
+        let distVal = targetDist;
+        if (settings.distanceBadgeUnit === 'mi') distVal = targetDist * 0.621371;
+        badge.textContent = Math.round(distVal) + ' ' + settings.distanceBadgeUnit;
+
+        if (settings.distanceBadgePosition === 'vehicle') {
+            const pointPx = map.latLngToContainerPoint(currentPos);
+            badge.style.left = pointPx.x + 'px';
+            badge.style.top = pointPx.y + 'px';
+        }
+    }
+
+    // Butter-Smooth Camera Following & Look-Ahead
+    if (settings.cameraMode !== 'static') {
+        const rad = angle * Math.PI / 180;
+        let targetLat = currentPos[0];
+        let targetLng = currentPos[1];
+
+        // Look-ahead camera (dramatic anticipatory tracking)
+        if (settings.cameraMode === 'cinematic-ahead') {
+            const lookAheadDistance = 0.0035; // degrees
+            targetLat += Math.sin(rad) * lookAheadDistance;
+            targetLng += Math.cos(rad) * lookAheadDistance;
+        }
+
+        if (settings.cameraMode === 'centered') {
+            map.panTo(currentPos, { animate: false });
+        } else {
+            // Exponential lerp smoothing
+            const lerpFactor = 0.03 + (settings.cameraSmoothness / 10) * 0.12; // 0.04 to 0.15
+            animationState.camLat += (targetLat - animationState.camLat) * lerpFactor;
+            animationState.camLng += (targetLng - animationState.camLng) * lerpFactor;
+            map.setView([animationState.camLat, animationState.camLng], map.getZoom(), { animate: false });
+        }
+    }
+
+    // Milestone / Point Triggering (Individual Overlays & Individual Pauses!)
+    for (let i = animationState.currentPointIndex + 1; i < points.length; i++) {
+        if (targetDist >= animationState.pointDistances[i]) {
+            animationState.currentPointIndex = i;
+            const pt = points[i];
+
+            // In progressive mode, reveal milestone marker as vehicle reaches it!
+            if (settings.routeRenderMode === 'progressive-pure') {
+                pt.marker.addTo(map);
+            }
+
+            // Check INDIVIDUAL point overlay toggle
+            if (pt.showOverlay) {
+                showPointContent(pt);
+            }
+
+            // Check INDIVIDUAL point pause toggle
+            if (pt.pauseHere) {
+                animationState.isPaused = true;
+                animationState.pauseStart = performance.now();
+                animationState.pauseUntil = animationState.pauseStart + (pt.pauseDuration || 3) * 1000;
+            }
+            break;
+        }
+    }
+
+    // Finished
+    if (progress >= 1) {
+        if (settings.showEndOverlay && (settings.endTitle || settings.endText || settings.endImage)) {
+            showCenterOverlay(settings.endTitle, settings.endText, settings.endImage);
+            setTimeout(() => {
+                document.getElementById('center-content').classList.remove('active');
+                stopAnimation();
+            }, (settings.endDuration || 3) * 1000);
+        } else {
+            setTimeout(() => stopAnimation(), 1200);
+        }
+        return;
+    }
+
+    animationId = requestAnimationFrame(animateFrame);
+}
+
+// Point Overlays Display
+function showPointContent(point) {
+    const hasContent = point.title || point.text || point.image;
+    if (!hasContent) return;
+
+    const isCenter = settings.pointOverlayPosition === 'center';
+    const overlay = isCenter ? document.getElementById('center-content') : document.getElementById('point-content');
+    const img = isCenter ? document.getElementById('cc-image') : document.getElementById('pc-image');
+    const title = isCenter ? document.getElementById('cc-title') : document.getElementById('pc-title');
+    const text = isCenter ? document.getElementById('cc-text') : document.getElementById('pc-text');
+
+    if (point.title) {
+        title.textContent = point.title;
+        title.style.display = 'block';
+    } else {
+        title.style.display = 'none';
+    }
+    text.textContent = point.text || '';
+
+    if (point.image) {
+        img.src = point.image;
+        img.style.display = 'block';
+    } else {
+        img.style.display = 'none';
+    }
+
+    overlay.classList.add('active');
+
+    if (!point.pauseHere) {
+        setTimeout(() => {
+            overlay.classList.remove('active');
+        }, (point.pauseDuration || 3) * 1000);
+    }
+}
+
+function hidePointOverlay() {
+    document.getElementById('point-content').classList.remove('active');
+    document.getElementById('center-content').classList.remove('active');
+}
+
+function showCenterOverlay(title, text, image) {
+    const overlay = document.getElementById('center-content');
+    const img = document.getElementById('cc-image');
+    const tit = document.getElementById('cc-title');
+    const txt = document.getElementById('cc-text');
+
+    tit.textContent = title || '';
+    txt.textContent = text || '';
+    if (image) {
+        img.src = image;
+        img.style.display = 'block';
+    } else {
+        img.style.display = 'none';
+    }
+    overlay.classList.add('active');
+}
+
+// GPS FORMATS IMPORTER (GPX, KML, GeoJSON & JSON)
+function setupDragAndDrop() {
+    const dropZone = document.getElementById('drop-zone');
+    let dragCounter = 0;
+
+    window.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        dragCounter++;
+        dropZone.style.display = 'flex';
+    });
+
+    window.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dragCounter--;
+        if (dragCounter <= 0) {
+            dropZone.style.display = 'none';
+            dragCounter = 0;
+        }
+    });
+
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    });
+
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dragCounter = 0;
+        dropZone.style.display = 'none';
+        const file = e.dataTransfer.files[0];
+        if (file) parseImportFile(file);
+    });
+}
+
+function handleGpsFileImport(input) {
+    const file = input.files[0];
+    if (file) parseImportFile(file);
+    input.value = '';
+}
+
+function parseImportFile(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+        const content = e.target.result;
+        try {
+            if (ext === 'gpx') {
+                parseGPX(content, file.name);
+            } else if (ext === 'kml') {
+                parseKML(content, file.name);
+            } else if (ext === 'geojson' || ext === 'json') {
+                parseGeoJSONorJSON(content, file.name);
+            } else {
+                alert('Formato no soportado. Usa archivos .gpx, .kml o .geojson / .json');
+            }
+        } catch (err) {
+            console.error('Import error:', err);
+            alert('Error al leer el archivo: ' + err.message);
+        }
+    };
+    reader.readAsText(file);
+}
+
+function parseGPX(xmlText, filename) {
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(xmlText, 'text/xml');
+    
+    // Find trackpoints or routepoints or waypoints
+    const trkpts = xml.querySelectorAll('trkpt, rtept');
+    const waypoints = xml.querySelectorAll('wpt');
+
+    const rawCoords = [];
+    trkpts.forEach(pt => {
+        const lat = parseFloat(pt.getAttribute('lat'));
+        const lon = parseFloat(pt.getAttribute('lon'));
+        if (!isNaN(lat) && !isNaN(lon)) rawCoords.push([lat, lon]);
+    });
+
+    if (rawCoords.length === 0 && waypoints.length > 0) {
+        waypoints.forEach(pt => {
+            const lat = parseFloat(pt.getAttribute('lat'));
+            const lon = parseFloat(pt.getAttribute('lon'));
+            if (!isNaN(lat) && !isNaN(lon)) rawCoords.push([lat, lon]);
+        });
+    }
+
+    if (rawCoords.length === 0) {
+        throw new Error('No se encontraron coordenadas válidas en el archivo GPX.');
+    }
+
+    loadParsedGPSRoute(rawCoords, filename.replace('.gpx', ''));
+}
+
+function parseKML(xmlText, filename) {
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(xmlText, 'text/xml');
+    const coordNodes = xml.querySelectorAll('coordinates');
+    const rawCoords = [];
+
+    coordNodes.forEach(node => {
+        const text = node.textContent.trim();
+        const tuples = text.split(/\s+/);
+        tuples.forEach(tuple => {
+            const parts = tuple.split(',');
+            if (parts.length >= 2) {
+                const lon = parseFloat(parts[0]);
+                const lat = parseFloat(parts[1]);
+                if (!isNaN(lat) && !isNaN(lon)) rawCoords.push([lat, lon]);
+            }
+        });
+    });
+
+    if (rawCoords.length === 0) {
+        throw new Error('No se encontraron coordenadas válidas en el archivo KML.');
+    }
+
+    loadParsedGPSRoute(rawCoords, filename.replace('.kml', ''));
+}
+
+function parseGeoJSONorJSON(text, filename) {
+    const data = JSON.parse(text);
+
+    // Check if it's our native OpenBoast export
+    if (data.lines || (typeof data === 'object' && Object.keys(data).some(k => k.startsWith('line_')))) {
+        linesData = data.lines || data;
+        saveToStorage();
+        populateLineSelect();
+        clearMapOnly();
+        alert('Líneas y ramales de OpenBoast importados con éxito.');
+        return;
+    }
+
+    // Generic GeoJSON
+    const rawCoords = [];
+    function extractCoords(geom) {
+        if (!geom) return;
+        if (geom.type === 'Point') {
+            rawCoords.push([geom.coordinates[1], geom.coordinates[0]]);
+        } else if (geom.type === 'LineString') {
+            geom.coordinates.forEach(c => rawCoords.push([c[1], c[0]]));
+        } else if (geom.type === 'MultiLineString') {
+            geom.coordinates.forEach(line => line.forEach(c => rawCoords.push([c[1], c[0]])));
+        }
+    }
+
+    if (data.type === 'FeatureCollection' && data.features) {
+        data.features.forEach(f => extractCoords(f.geometry));
+    } else if (data.type === 'Feature') {
+        extractCoords(data.geometry);
+    } else if (data.type === 'LineString' || data.type === 'Point' || data.type === 'MultiLineString') {
+        extractCoords(data);
+    }
+
+    if (rawCoords.length === 0) {
+        throw new Error('No se encontraron geometrías de ruta en el archivo GeoJSON.');
+    }
+
+    loadParsedGPSRoute(rawCoords, filename.replace(/\.(geojson|json)$/, ''));
+}
+
+function loadParsedGPSRoute(rawCoords, routeName) {
+    clearMapOnly();
+
+    // If the imported route has many dense GPS points (e.g. 1000s),
+    // pick 4 to 8 smart milestone checkpoints for user editing, while preserving the full HD route!
+    const step = Math.max(1, Math.floor(rawCoords.length / 6));
+    const sampleIndices = [];
+    for (let i = 0; i < rawCoords.length; i += step) {
+        sampleIndices.push(i);
+    }
+    if (sampleIndices[sampleIndices.length - 1] !== rawCoords.length - 1) {
+        sampleIndices.push(rawCoords.length - 1);
+    }
+
+    for (let s = 0; s < sampleIndices.length; s++) {
+        const idx = sampleIndices[s];
+        const coord = rawCoords[idx];
+        const segSlice = (s < sampleIndices.length - 1)
+            ? rawCoords.slice(sampleIndices[s], sampleIndices[s + 1] + 1)
+            : null;
+
+        addPoint(coord[0], coord[1], {
+            title: s === 0 ? 'Inicio (' + routeName + ')' : (s === sampleIndices.length - 1 ? 'Destino' : ('Hito ' + (s + 1))),
+            customSegmentCoords: segSlice
+        });
+    }
+
+    fitBounds();
+    alert(`Ruta "${routeName}" importada con éxito (${rawCoords.length} puntos GPS).`);
+}
+
+// Storage, Branches & Lines
 function loadFromStorage() {
     try {
         const raw = localStorage.getItem('travelboast_lines');
         if (raw) linesData = JSON.parse(raw);
-    } catch (e) { linesData = {}; }
+    } catch (e) {
+        linesData = {};
+    }
 }
 
 function saveToStorage() {
@@ -504,10 +2367,11 @@ function saveToStorage() {
 
 function populateLineSelect() {
     const sel = document.getElementById('line-select');
-    sel.innerHTML = '<option value="">-- Nueva línea --</option>';
+    sel.innerHTML = '<option value="">-- Nueva Línea --</option>';
     Object.entries(linesData).forEach(([id, line]) => {
         const opt = document.createElement('option');
-        opt.value = id; opt.textContent = line.name;
+        opt.value = id;
+        opt.textContent = line.name;
         sel.appendChild(opt);
     });
     if (currentLineId && linesData[currentLineId]) sel.value = currentLineId;
@@ -533,11 +2397,12 @@ function onLineChange() {
 
 function populateBranchSelect() {
     const sel = document.getElementById('branch-select');
-    sel.innerHTML = '<option value="">-- Nuevo ramal --</option>';
+    sel.innerHTML = '<option value="">-- Nuevo Ramal --</option>';
     if (currentLineId && linesData[currentLineId]) {
         Object.entries(linesData[currentLineId].branches).forEach(([id, branch]) => {
             const opt = document.createElement('option');
-            opt.value = id; opt.textContent = branch.name;
+            opt.value = id;
+            opt.textContent = branch.name;
             sel.appendChild(opt);
         });
     }
@@ -570,54 +2435,46 @@ function loadBranchData(lineId, branchId) {
     const branch = linesData[lineId].branches[branchId];
     if (!branch) return;
     clearMapOnly();
+
     if (branch.settings) {
         Object.assign(settings, branch.settings);
+        // Sync UI
         document.getElementById('duration-slider').value = settings.totalDuration;
         document.getElementById('duration-display').textContent = settings.totalDuration + 's';
         document.getElementById('custom-color').value = settings.routeColor;
+        document.getElementById('route-width-slider').value = settings.routeWidth || 6;
+        document.getElementById('route-width-display').textContent = (settings.routeWidth || 6) + 'px';
+        document.getElementById('route-render-mode').value = settings.routeRenderMode || 'progressive-pure';
         document.getElementById('rotate-vehicle').checked = settings.rotateVehicle;
-        document.getElementById('show-emoji').checked = settings.showEmoji;
-        document.getElementById('show-point-overlay').checked = settings.showPointOverlay;
-        document.getElementById('pause-at-points').checked = settings.pauseAtPoints;
-        document.getElementById('point-overlay-position').value = settings.pointOverlayPosition || 'bottom';
-        document.getElementById('show-start-overlay').checked = settings.showStartOverlay;
-        document.getElementById('start-title').value = settings.startTitle || '';
-        document.getElementById('start-text').value = settings.startText || '';
-        document.getElementById('start-image').value = settings.startImage || '';
-        document.getElementById('start-duration').value = settings.startDuration || 3;
-        document.getElementById('start-duration-display').textContent = (settings.startDuration || 3) + 's';
-        document.getElementById('show-end-overlay').checked = settings.showEndOverlay;
-        document.getElementById('end-title').value = settings.endTitle || '';
-        document.getElementById('end-text').value = settings.endText || '';
-        document.getElementById('end-image').value = settings.endImage || '';
-        document.getElementById('end-duration').value = settings.endDuration || 3;
-        document.getElementById('end-duration-display').textContent = (settings.endDuration || 3) + 's';
-        document.getElementById('custom-vehicle').value = settings.customVehicleUrl || '';
+        document.getElementById('vehicle-shadow').checked = settings.vehicleShadow;
         document.getElementById('custom-text').value = settings.customText || '';
-        document.querySelectorAll('input[name="visibility"]').forEach(r => { r.checked = (r.value === settings.visibility); });
-        setVehicle(settings.vehicle, false);
-        setCircleColor(settings.circleColor, false);
-        setRouteColor(settings.routeColor, false);
+        document.getElementById('camera-mode-select').value = settings.cameraMode || 'cinematic-ahead';
+        document.getElementById('cam-smooth-slider').value = settings.cameraSmoothness || 7;
+        document.getElementById('show-distance-badge').checked = settings.showDistanceBadge !== false;
+        
+        setMapTile(settings.mapTile || 'positron');
+        setFrameMode(settings.frameMode || 'free');
+
+        if (settings.customVehicleUrl) {
+            setCustomVehicleUrl(settings.customVehicleUrl);
+        } else {
+            selectVehiclePreset(settings.vehicle || 'van');
+        }
+        setCircleColor(settings.circleColor || 'none');
+        setRouteColor(settings.routeColor || '#ef4444');
     }
-    if (branch.points) {
+
+    if (branch.points && branch.points.length > 0) {
         branch.points.forEach(p => {
-            const id = Date.now() + Math.random();
-            const num = points.length + 1;
-            const marker = L.marker([p.lat, p.lng], {
-                icon: createNumberIcon(num, num === 1 ? 'start' : 'normal'),
-                draggable: true
-            }).addTo(map);
-            marker.on('dragend', async (e) => {
-                const pt = points.find(x => x.id === id);
-                if (pt) { pt.lat = e.target.getLatLng().lat; pt.lng = e.target.getLatLng().lng; await recalculateRoutes(); renderPointsList(); }
+            addPoint(p.lat, p.lng, {
+                title: p.title,
+                text: p.text,
+                image: p.image,
+                showOverlay: p.showOverlay,
+                pauseHere: p.pauseHere,
+                pauseDuration: p.pauseDuration
             });
-            marker.on('click', () => openEditModal(id));
-            points.push({ id, lat: p.lat, lng: p.lng, num, title: p.title || '', text: p.text || '', image: p.image || '', pauseDuration: p.pauseDuration || 3, marker });
         });
-        updatePointStyles();
-        renderPointsList();
-        recalculateRoutes();
-        updatePlayButton();
         fitBounds();
     }
 }
@@ -627,6 +2484,7 @@ function saveCurrentBranch() {
     const branchSel = document.getElementById('branch-select');
     const lineName = document.getElementById('line-name').value.trim();
     const branchName = document.getElementById('branch-name').value.trim();
+
     let lineId = lineSel.value;
     if (!lineId) {
         if (!lineName) { alert('Ingresa un nombre para la línea'); return; }
@@ -635,6 +2493,7 @@ function saveCurrentBranch() {
     } else {
         if (lineName) linesData[lineId].name = lineName;
     }
+
     let branchId = branchSel.value;
     if (!branchId) {
         if (!branchName) { alert('Ingresa un nombre para el ramal'); return; }
@@ -643,15 +2502,24 @@ function saveCurrentBranch() {
     } else {
         if (branchName) linesData[lineId].branches[branchId].name = branchName;
     }
+
     linesData[lineId].branches[branchId].points = points.map(p => ({
-        lat: p.lat, lng: p.lng, title: p.title, text: p.text, image: p.image, pauseDuration: p.pauseDuration
+        lat: p.lat,
+        lng: p.lng,
+        title: p.title,
+        text: p.text,
+        image: p.image,
+        showOverlay: p.showOverlay,
+        pauseHere: p.pauseHere,
+        pauseDuration: p.pauseDuration
     }));
     linesData[lineId].branches[branchId].settings = { ...settings };
+
     saveToStorage();
     currentLineId = lineId;
     currentBranchId = branchId;
     populateLineSelect();
-    alert('Guardado correctamente');
+    alert('Ramal guardado correctamente');
 }
 
 function deleteCurrentBranch() {
@@ -669,35 +2537,30 @@ function deleteCurrentBranch() {
 }
 
 function exportData() {
-    const dataStr = JSON.stringify(linesData, null, 2);
+    const exportObj = {
+        version: '2.0',
+        exportedAt: new Date().toISOString(),
+        settings: settings,
+        currentPoints: points.map(p => ({
+            lat: p.lat,
+            lng: p.lng,
+            title: p.title,
+            text: p.text,
+            image: p.image,
+            showOverlay: p.showOverlay,
+            pauseHere: p.pauseHere,
+            pauseDuration: p.pauseDuration
+        })),
+        lines: linesData
+    };
+    const dataStr = JSON.stringify(exportObj, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'openboast_lineas.json';
+    a.download = 'openboast_recorrido.json';
     a.click();
     URL.revokeObjectURL(url);
-}
-
-function importData(input) {
-    const file = input.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const data = JSON.parse(e.target.result);
-            if (typeof data !== 'object') throw new Error('Formato inválido');
-            linesData = data;
-            saveToStorage();
-            currentLineId = null;
-            currentBranchId = null;
-            populateLineSelect();
-            clearAll();
-            alert('Datos cargados correctamente');
-        } catch (err) { alert('Error al cargar: ' + err.message); }
-    };
-    reader.readAsText(file);
-    input.value = '';
 }
 
 function clearMapOnly() {
@@ -711,609 +2574,18 @@ function clearMapOnly() {
     updatePlayButton();
 }
 
-function onMapClick(e) {
-    if (currentMode !== 'add') return;
-    addPoint(e.latlng.lat, e.latlng.lng);
-    setMode('navigate');
-}
-
-function setMode(mode) {
-    currentMode = mode;
-    const navBtn = document.getElementById('mode-navigate');
-    const addBtn = document.getElementById('mode-add');
-    if (mode === 'navigate') {
-        navBtn.className = 'flex-1 py-2 px-3 rounded-lg text-sm font-medium bg-white shadow-sm text-gray-800 transition-all';
-        addBtn.className = 'flex-1 py-2 px-3 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 transition-all';
-        map.getContainer().style.cursor = '';
-    } else {
-        addBtn.className = 'flex-1 py-2 px-3 rounded-lg text-sm font-medium bg-white shadow-sm text-gray-800 transition-all';
-        navBtn.className = 'flex-1 py-2 px-3 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 transition-all';
-        map.getContainer().style.cursor = 'crosshair';
-    }
-}
-
-function addPoint(lat, lng) {
-    const id = Date.now() + Math.random();
-    const num = points.length + 1;
-    const marker = L.marker([lat, lng], {
-        icon: createNumberIcon(num, num === 1 ? 'start' : 'normal'),
-        draggable: true
-    }).addTo(map);
-    marker.on('dragend', async (e) => {
-        const p = points.find(p => p.id === id);
-        if (p) { p.lat = e.target.getLatLng().lat; p.lng = e.target.getLatLng().lng; await recalculateRoutes(); renderPointsList(); }
-    });
-    marker.on('click', () => openEditModal(id));
-    points.push({ id, lat, lng, num, title: '', text: '', image: '', pauseDuration: 3, marker });
-    updatePointStyles();
-    renderPointsList();
-    recalculateRoutes();
-    updatePlayButton();
-}
-
-function createNumberIcon(num, type) {
-    const extraClass = type === 'start' ? 'start' : (type === 'end' ? 'end' : '');
-    return L.divIcon({
-        className: 'custom-div-icon',
-        html: `<div class="point-marker ${extraClass}" data-num="${num}">${num}</div>`,
-        iconSize: [32, 32], iconAnchor: [16, 16]
-    });
-}
-
-function updatePointStyles() {
-    points.forEach((p, idx) => {
-        let type = 'normal';
-        if (idx === 0) type = 'start';
-        else if (idx === points.length - 1) type = 'end';
-        let visible = true;
-        if (settings.visibility === 'none' || settings.visibility === 'traced') visible = false;
-        else if (settings.visibility === 'endpoints' && idx !== 0 && idx !== points.length - 1) visible = false;
-        const html = visible
-            ? `<div class="point-marker ${type}" data-num="${idx+1}">${idx+1}</div>`
-            : `<div class="point-marker hidden-marker" data-num="${idx+1}">${idx+1}</div>`;
-        p.marker.setIcon(L.divIcon({ className: 'custom-div-icon', html, iconSize: [32, 32], iconAnchor: [16, 16] }));
-        if (visible) p.marker.addTo(map); else map.removeLayer(p.marker);
-    });
-}
-
-function renderPointsList() {
-    const container = document.getElementById('points-list');
-    document.getElementById('point-count').textContent = points.length;
-    if (points.length === 0) {
-        container.innerHTML = `<div class="text-center py-8 text-gray-400 text-sm italic">Haz clic en "+ Punto" y luego en el mapa para comenzar</div>`;
-        return;
-    }
-    container.innerHTML = points.map((p, idx) => `
-        <div class="bg-white border border-gray-100 rounded-xl p-3 flex items-center gap-3 hover:shadow-md transition-shadow animate-slide-in">
-            <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm flex-shrink-0">${idx + 1}</div>
-            <div class="flex-1 min-w-0">
-                <div class="text-xs text-gray-500 font-mono truncate">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</div>
-                <div class="text-xs text-gray-400 truncate">${p.title ? '📝 ' + p.title.substring(0, 20) : (p.text ? '📝 ' + p.text.substring(0, 20) : 'Sin descripción')}</div>
-            </div>
-            <div class="flex gap-1">
-                <button onclick="movePoint(${p.id}, -1)" class="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400" ${idx === 0 ? 'disabled style="opacity:0.3"' : ''}>⬆️</button>
-                <button onclick="movePoint(${p.id}, 1)" class="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400" ${idx === points.length - 1 ? 'disabled style="opacity:0.3"' : ''}>⬇️</button>
-                <button onclick="openEditModal(${p.id})" class="p-1.5 hover:bg-blue-50 text-blue-500 rounded-lg">✏️</button>
-            </div>
-        </div>
-    `).join('');
-}
-
-function movePoint(id, dir) {
-    const idx = points.findIndex(p => p.id === id);
-    if (idx < 0) return;
-    const newIdx = idx + dir;
-    if (newIdx < 0 || newIdx >= points.length) return;
-    [points[idx], points[newIdx]] = [points[newIdx], points[idx]];
-    points.forEach((p, i) => { p.num = i + 1; });
-    updatePointStyles();
-    renderPointsList();
-    recalculateRoutes();
-}
-
-function openEditModal(id) {
-    editingPointId = id;
-    const p = points.find(p => p.id === id);
-    if (!p) return;
-    document.getElementById('edit-point-num').textContent = '#' + p.num;
-    document.getElementById('edit-title').value = p.title || '';
-    document.getElementById('edit-text').value = p.text;
-    document.getElementById('edit-image').value = p.image;
-    document.getElementById('edit-duration').value = p.pauseDuration;
-    document.getElementById('edit-duration-display').textContent = p.pauseDuration + 's';
-    const modal = document.getElementById('edit-modal');
-    const content = document.getElementById('edit-modal-content');
-    modal.classList.remove('hidden');
-    setTimeout(() => { content.classList.remove('scale-95', 'opacity-0'); content.classList.add('scale-100', 'opacity-100'); }, 10);
-}
-
-function closeEditModal() {
-    const modal = document.getElementById('edit-modal');
-    const content = document.getElementById('edit-modal-content');
-    content.classList.remove('scale-100', 'opacity-100');
-    content.classList.add('scale-95', 'opacity-0');
-    setTimeout(() => modal.classList.add('hidden'), 200);
-    editingPointId = null;
-}
-
-function savePointEdit() {
-    if (!editingPointId) return;
-    const p = points.find(p => p.id === editingPointId);
-    if (p) {
-        p.title = document.getElementById('edit-title').value;
-        p.text = document.getElementById('edit-text').value;
-        p.image = document.getElementById('edit-image').value;
-        p.pauseDuration = parseInt(document.getElementById('edit-duration').value);
-    }
-    renderPointsList();
-    closeEditModal();
-}
-
-function deletePointEdit() {
-    if (!editingPointId) return;
-    removePoint(editingPointId);
-    closeEditModal();
-}
-
-function removePoint(id) {
-    const idx = points.findIndex(p => p.id === id);
-    if (idx < 0) return;
-    map.removeLayer(points[idx].marker);
-    points.splice(idx, 1);
-    points.forEach((p, i) => { p.num = i + 1; });
-    updatePointStyles();
-    renderPointsList();
-    recalculateRoutes();
-    updatePlayButton();
-}
-
-async function recalculateRoutes() {
-    routeLines.forEach(l => map.removeLayer(l));
-    routeLines = [];
-    routeSegments = [];
-    if (points.length < 2) return;
-    for (let i = 0; i < points.length - 1; i++) {
-        const from = points[i];
-        const to = points[i + 1];
-        try {
-            const coords = await fetchRoute(from.lng, from.lat, to.lng, to.lat);
-            if (coords && coords.length > 0) {
-                routeSegments.push(coords);
-                const polyline = L.polyline(coords, {
-                    color: settings.routeColor, weight: 5, opacity: 0.85,
-                    lineCap: 'round', lineJoin: 'round', className: 'route-pulse'
-                }).addTo(map);
-                routeLines.push(polyline);
-            }
-        } catch (e) {
-            console.error('Route error:', e);
-            const straight = [[from.lat, from.lng], [to.lat, to.lng]];
-            routeSegments.push(straight);
-            const polyline = L.polyline(straight, {
-                color: settings.routeColor, weight: 5, opacity: 0.5, dashArray: '10, 10'
-            }).addTo(map);
-            routeLines.push(polyline);
-        }
-    }
-}
-
-async function fetchRoute(lon1, lat1, lon2, lat2) {
-    const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=polyline`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.routes && data.routes.length > 0) return decodePolyline(data.routes[0].geometry);
-    return null;
-}
-
-function decodePolyline(encoded) {
-    const poly = [];
-    let index = 0, lat = 0, lng = 0;
-    while (index < encoded.length) {
-        let b, shift = 0, result = 0;
-        do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
-        const dlat = (result & 1) ? ~(result >> 1) : (result >> 1);
-        lat += dlat;
-        shift = 0; result = 0;
-        do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
-        const dlng = (result & 1) ? ~(result >> 1) : (result >> 1);
-        lng += dlng;
-        poly.push([lat / 1e5, lng / 1e5]);
-    }
-    return poly;
-}
-
-function setRouteColor(color, updateUI) {
-    if (updateUI === undefined) updateUI = true;
-    settings.routeColor = color;
-    if (updateUI) document.getElementById('custom-color').value = color;
-    routeLines.forEach(l => l.setStyle({ color }));
-}
-
-function updateDuration(val) {
-    settings.totalDuration = parseInt(val);
-    document.getElementById('duration-display').textContent = val + 's';
-}
-
-function setVehicle(type, updateUI) {
-    if (updateUI === undefined) updateUI = true;
-    settings.vehicle = type;
-    settings.customVehicleUrl = '';
-    if (updateUI) document.getElementById('custom-vehicle').value = '';
-    if (updateUI) {
-        document.querySelectorAll('.vehicle-btn').forEach(btn => {
-            btn.classList.remove('border-blue-500', 'bg-blue-50');
-            btn.classList.add('border-transparent', 'bg-gray-50');
-        });
-        document.getElementById('veh-' + type).classList.remove('border-transparent', 'bg-gray-50');
-        document.getElementById('veh-' + type).classList.add('border-blue-500', 'bg-blue-50');
-    }
-    if (vehicleMarker) updateVehicleMarkerIcon();
-}
-
-function setCustomVehicle(url) {
-    if (!url) return;
-    settings.customVehicleUrl = url;
-    document.querySelectorAll('.vehicle-btn').forEach(btn => {
-        btn.classList.remove('border-blue-500', 'bg-blue-50');
-        btn.classList.add('border-transparent', 'bg-gray-50');
-    });
-    if (vehicleMarker) updateVehicleMarkerIcon();
-}
-
-function updateVehicleSettings() {
-    settings.rotateVehicle = document.getElementById('rotate-vehicle').checked;
-    settings.showEmoji = document.getElementById('show-emoji').checked;
-    settings.customText = document.getElementById('custom-text').value.substring(0, 3);
-    if (vehicleMarker) updateVehicleMarkerIcon();
-}
-
-function setCircleColor(color, updateUI) {
-    if (updateUI === undefined) updateUI = true;
-    settings.circleColor = color;
-    if (updateUI) {
-        const ids = ['circ-none','circ-blue','circ-red','circ-green','circ-amber','circ-purple','circ-pink'];
-        const rings = {
-            'circ-none': 'ring-gray-400', 'circ-blue': 'ring-blue-500', 'circ-red': 'ring-red-500',
-            'circ-green': 'ring-green-500', 'circ-amber': 'ring-amber-500', 'circ-purple': 'ring-purple-500', 'circ-pink': 'ring-pink-500'
-        };
-        ids.forEach(id => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.classList.remove('ring-gray-400','ring-blue-500','ring-red-500','ring-green-500','ring-amber-500','ring-purple-500','ring-pink-500');
-            el.classList.add('ring-transparent');
-        });
-        const colorMap = {
-            'none': 'circ-none', '#3b82f6': 'circ-blue', '#ef4444': 'circ-red',
-            '#10b981': 'circ-green', '#f59e0b': 'circ-amber', '#8b5cf6': 'circ-purple', '#ec4899': 'circ-pink'
-        };
-        const activeId = colorMap[color];
-        if (activeId) {
-            const el = document.getElementById(activeId);
-            if (el) { el.classList.remove('ring-transparent'); el.classList.add(rings[activeId]); }
-        }
-    }
-    if (vehicleMarker) updateVehicleMarkerIcon();
-}
-
-function updateVehicleMarkerIcon() {
-    if (!vehicleMarker) return;
-    const iconHtml = buildVehicleHtml();
-    vehicleMarker.setIcon(L.divIcon({
-        className: 'vehicle-marker',
-        html: iconHtml,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20]
-    }));
-}
-
-function buildVehicleHtml(angle) {
-    angle = angle || 0;
-    let content = '';
-    if (settings.customText && settings.customText.trim()) {
-        content = `<span class="vehicle-text" style="transform-origin:center;">${settings.customText.trim()}</span>`;
-    } else if (settings.customVehicleUrl) {
-        content = `<img src="${settings.customVehicleUrl}" style="width:32px;height:32px;object-fit:contain;">`;
-    } else if (settings.showEmoji) {
-        content = `<span class="vehicle-icon" style="transform-origin:center;">${vehicleIcons[settings.vehicle] || '🚌'}</span>`;
-    }
-    const rotation = settings.rotateVehicle ? `transform: rotate(${angle + 90}deg);` : '';
-    if (settings.circleColor !== 'none') {
-        return `<div class="vehicle-circle" style="background:${settings.circleColor};${rotation}">${content}</div>`;
-    }
-    return `<div style="${rotation}">${content}</div>`;
-}
-
-function setVisibility(mode) {
-    settings.visibility = mode;
-    updatePointStyles();
-}
-
-function updatePointOverlaySettings() {
-    settings.showPointOverlay = document.getElementById('show-point-overlay').checked;
-    settings.pauseAtPoints = document.getElementById('pause-at-points').checked;
-    settings.pointOverlayPosition = document.getElementById('point-overlay-position').value;
-}
-
-function updateStartOverlaySettings() {
-    settings.showStartOverlay = document.getElementById('show-start-overlay').checked;
-    settings.startTitle = document.getElementById('start-title').value;
-    settings.startText = document.getElementById('start-text').value;
-    settings.startImage = document.getElementById('start-image').value;
-    settings.startDuration = parseInt(document.getElementById('start-duration').value);
-}
-
-function updateEndOverlaySettings() {
-    settings.showEndOverlay = document.getElementById('show-end-overlay').checked;
-    settings.endTitle = document.getElementById('end-title').value;
-    settings.endText = document.getElementById('end-text').value;
-    settings.endImage = document.getElementById('end-image').value;
-    settings.endDuration = parseInt(document.getElementById('end-duration').value);
-}
-
-function updatePlayButton() {
-    const btn = document.getElementById('play-btn');
-    btn.disabled = points.length < 2;
-}
-
-let animationState = {
-    startTime: null, pausedTime: 0, isPaused: false, pauseUntil: 0,
-    totalDistance: 0, distances: [], allCoords: [], currentPointIndex: 0,
-    showingStartOverlay: false, currentCoordIndex: 0
-};
-
-async function toggleAnimation() {
-    if (isPlaying) { stopAnimation(); return; }
-    if (points.length < 2) return;
-    startAnimation();
-}
-
-function stopAnimation() {
-    isPlaying = false;
-    if (animationId) cancelAnimationFrame(animationId);
-    if (vehicleMarker) { map.removeLayer(vehicleMarker); vehicleMarker = null; }
-    if (routeTracedLine) { map.removeLayer(routeTracedLine); routeTracedLine = null; }
-    routeLines.forEach(l => l.setStyle({ opacity: 0.85 }));
-    document.getElementById('play-icon').textContent = '▶️';
-    document.getElementById('play-text').textContent = 'Iniciar Recorrido';
-    document.getElementById('play-btn').classList.remove('from-red-500', 'to-pink-600');
-    document.getElementById('play-btn').classList.add('from-blue-600', 'to-purple-600');
-    hidePointOverlay();
-    document.getElementById('center-content').classList.remove('active');
-    document.getElementById('progress-bar').classList.add('hidden');
-    document.getElementById('progress-fill').style.width = '0%';
-    updatePointStyles();
-}
-
-async function startAnimation() {
-    isPlaying = true;
-    document.getElementById('play-icon').textContent = '⏹️';
-    document.getElementById('play-text').textContent = 'Detener';
-    document.getElementById('play-btn').classList.remove('from-blue-600', 'to-purple-600');
-    document.getElementById('play-btn').classList.add('from-red-500', 'to-pink-600');
-    document.getElementById('progress-bar').classList.remove('hidden');
-    points.forEach(p => map.removeLayer(p.marker));
-
-    const allCoords = [];
-    const pointDistances = [0];
-    let totalDist = 0;
-    for (let seg of routeSegments) {
-        for (let i = 0; i < seg.length; i++) {
-            if (i === 0 && allCoords.length > 0) continue;
-            allCoords.push(seg[i]);
-            if (allCoords.length > 1) {
-                const d = haversine(allCoords[allCoords.length-2], seg[i]);
-                totalDist += d;
-            }
-        }
-        pointDistances.push(totalDist);
-    }
-
-    animationState = {
-        startTime: performance.now(), pausedTime: 0, isPaused: false, pauseUntil: 0,
-        totalDistance: totalDist, distances: pointDistances, allCoords: allCoords,
-        currentPointIndex: 0, showingStartOverlay: false, currentCoordIndex: 0
-    };
-
-    if (settings.showStartOverlay && (settings.startTitle || settings.startText || settings.startImage)) {
-        animationState.showingStartOverlay = true;
-        animationState.isPaused = true;
-        animationState.pauseStart = performance.now();
-        animationState.pauseUntil = animationState.pauseStart + settings.startDuration * 1000;
-        showCenterOverlay(settings.startTitle, settings.startText, settings.startImage);
-    }
-
-    if (settings.visibility === 'traced') {
-    routeLines.forEach(l => l.setStyle({ opacity: 0 }));
-    routeTracedLine = L.polyline([allCoords[0]], {
-        color: settings.routeColor, weight: 5, opacity: 0.9,
-        lineCap: 'round', lineJoin: 'round'
-    }).addTo(map);
-    }
-
-    vehicleMarker = L.marker(allCoords[0], {
-        icon: L.divIcon({ className: 'vehicle-marker', html: buildVehicleHtml(0), iconSize: [40, 40], iconAnchor: [20, 20] }),
-        zIndexOffset: 1000
-    }).addTo(map);
-
-    animateFrame();
-}
-
-function animateFrame() {
-    if (!isPlaying) return;
-    const now = performance.now();
-    const elapsed = (now - animationState.startTime) / 1000;
-    const effectiveElapsed = elapsed - animationState.pausedTime;
-
-    if (animationState.isPaused) {
-        if (now < animationState.pauseUntil) {
-            animationId = requestAnimationFrame(animateFrame);
-            return;
-        }
-        animationState.isPaused = false;
-        animationState.pausedTime += (now - animationState.pauseStart) / 1000;
-        hidePointOverlay();
-        if (animationState.showingStartOverlay) {
-            document.getElementById('center-content').classList.remove('active');
-            animationState.showingStartOverlay = false;
-        }
-    }
-
-    const progress = Math.min(effectiveElapsed / settings.totalDuration, 1);
-    document.getElementById('progress-fill').style.width = (progress * 100) + '%';
-    const targetDist = progress * animationState.totalDistance;
-
-    let traveled = 0;
-    let currentPos = animationState.allCoords[0];
-    let angle = 0;
-    let currentIdx = 0;
-    for (let i = 1; i < animationState.allCoords.length; i++) {
-        const from = animationState.allCoords[i-1];
-        const to = animationState.allCoords[i];
-        const segDist = haversine(from, to);
-        if (traveled + segDist >= targetDist) {
-            const segProgress = (targetDist - traveled) / segDist;
-            currentPos = [
-                from[0] + (to[0] - from[0]) * segProgress,
-                from[1] + (to[1] - from[1]) * segProgress
-            ];
-            angle = Math.atan2(to[1] - from[1], to[0] - from[0]) * 180 / Math.PI;
-            currentIdx = i;
-            break;
-        }
-        traveled += segDist;
-        currentPos = to;
-        currentIdx = i;
-    }
-    animationState.currentCoordIndex = currentIdx;
-
-    vehicleMarker.setLatLng(currentPos);
-    const iconEl = vehicleMarker.getElement();
-    if (iconEl) {
-        const inner = iconEl.querySelector('.vehicle-icon, .vehicle-text, img, .vehicle-circle');
-        if (inner && settings.rotateVehicle) {
-            inner.style.transform = `rotate(${angle + 90}deg)`;
-        }
-    }
-
-    if (settings.cameraFollowVehicle) {
-        map.panTo(currentPos, { animate: false });
-    }
-
-    if (settings.visibility === 'traced' && routeTracedLine) {
-        const tracedCoords = [];
-        for (let j = 0; j < currentIdx; j++) tracedCoords.push(animationState.allCoords[j]);
-        tracedCoords.push(currentPos);
-        routeTracedLine.setLatLngs(tracedCoords);
-    }
-
-    for (let i = animationState.currentPointIndex + 1; i < points.length; i++) {
-        if (targetDist >= animationState.distances[i]) {
-            animationState.currentPointIndex = i;
-            if (settings.showPointOverlay) {
-                showPointContent(points[i]);
-            }
-            if (settings.pauseAtPoints) {
-                animationState.isPaused = true;
-                animationState.pauseStart = performance.now();
-                animationState.pauseUntil = animationState.pauseStart + points[i].pauseDuration * 1000;
-            }
-            break;
-        }
-    }
-
-    if (progress >= 1) {
-        if (settings.showEndOverlay && (settings.endTitle || settings.endText || settings.endImage)) {
-            showCenterOverlay(settings.endTitle, settings.endText, settings.endImage);
-            setTimeout(() => {
-                document.getElementById('center-content').classList.remove('active');
-                stopAnimation();
-            }, settings.endDuration * 1000);
-        } else {
-            setTimeout(() => stopAnimation(), 1000);
-        }
-        return;
-    }
-
-    animationId = requestAnimationFrame(animateFrame);
-}
-
-function showPointContent(point) {
-    const hasContent = point.title || point.text || point.image;
-    if (!hasContent) return;
-    const isCenter = settings.pointOverlayPosition === 'center';
-    const overlay = isCenter ? document.getElementById('center-content') : document.getElementById('point-content');
-    const img = isCenter ? document.getElementById('cc-image') : document.getElementById('pc-image');
-    const title = isCenter ? document.getElementById('cc-title') : document.getElementById('pc-title');
-    const text = isCenter ? document.getElementById('cc-text') : document.getElementById('pc-text');
-
-    if (point.title) {
-        title.textContent = point.title;
-        title.style.display = 'block';
-    } else {
-        title.style.display = 'none';
-    }
-    text.textContent = point.text || '';
-    if (point.image) {
-        img.src = point.image;
-        img.style.display = 'block';
-    } else {
-        img.style.display = 'none';
-    }
-    overlay.classList.add('active');
-    if (!settings.pauseAtPoints) {
-        setTimeout(() => { overlay.classList.remove('active'); }, point.pauseDuration * 1000);
-    }
-}
-
-function hidePointOverlay() {
-    document.getElementById('point-content').classList.remove('active');
-    document.getElementById('center-content').classList.remove('active');
-}
-
-function showCenterOverlay(title, text, image) {
-    const overlay = document.getElementById('center-content');
-    const img = document.getElementById('cc-image');
-    const tit = document.getElementById('cc-title');
-    const txt = document.getElementById('cc-text');
-    tit.textContent = title || '';
-    txt.textContent = text || '';
-    if (image) {
-        img.src = image;
-        img.style.display = 'block';
-    } else {
-        img.style.display = 'none';
-    }
-    overlay.classList.add('active');
-}
-
-function haversine(a, b) {
-    const R = 6371;
-    const dLat = (b[0] - a[0]) * Math.PI / 180;
-    const dLon = (b[1] - a[1]) * Math.PI / 180;
-    const lat1 = a[0] * Math.PI / 180;
-    const lat2 = b[0] * Math.PI / 180;
-    const x = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2);
-    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
-}
-
 function clearAll() {
-    if (!confirm('¿Eliminar todos los puntos?')) return;
-    stopAnimation();
-    points.forEach(p => map.removeLayer(p.marker));
-    points = [];
-    routeLines.forEach(l => map.removeLayer(l));
-    routeLines = [];
-    routeSegments = [];
-    renderPointsList();
-    updatePlayButton();
+    if (points.length > 0 && !confirm('¿Eliminar todos los puntos del recorrido?')) return;
+    clearMapOnly();
 }
 
 function fitBounds() {
     if (points.length === 0) return;
     const group = new L.featureGroup(points.map(p => p.marker));
-    map.fitBounds(group.getBounds().pad(0.2));
+    map.fitBounds(group.getBounds().pad(0.22));
 }
 
+// Start application
 window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
