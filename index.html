@@ -47,7 +47,7 @@
             align-items: center;
             justify-content: center;
             transform-origin: center center;
-            transition: none; /* Controlled strictly by GPU transform */
+            transition: none;
             will-change: transform;
         }
         .vehicle-circle {
@@ -146,7 +146,7 @@
             transform: scale(1.2);
         }
 
-        /* Aspect Ratio Framing Container - HIDDEN BY DEFAULT */
+        /* Aspect Ratio Framing Container - HIDDEN BY DEFAULT IN FREE MODE */
         #framing-container {
             display: none;
             position: absolute;
@@ -574,6 +574,11 @@
                     <input type="range" id="duration-slider" min="5" max="180" value="35" oninput="updateDuration(this.value)">
                     <div class="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>5s (Rápido)</span><span>3 min</span></div>
                 </div>
+
+                <div class="flex items-center justify-between pt-2 border-t border-gray-200/80">
+                    <label for="loop-route" class="text-xs font-medium text-gray-700">Repetir en bucle (Loop al finalizar)</label>
+                    <input type="checkbox" id="loop-route" onchange="settings.loopRoute = this.checked" class="w-4 h-4 text-blue-600 rounded">
+                </div>
             </div>
 
             <!-- Distance Badge (TravelBoast Style 81 km) -->
@@ -798,8 +803,9 @@
 
 <script>
 /**
- * OPENBOAST - ADVANCED TRAVELBOAST-STYLE ROUTE ANIMATOR (v2.1)
+ * OPENBOAST - ADVANCED TRAVELBOAST-STYLE ROUTE ANIMATOR (v2.2)
  * High-performance, vibration-free tracking, clean full-screen view.
+ * Solved race condition in route segment calculation.
  */
 
 // Core State
@@ -807,7 +813,7 @@ let map;
 let currentTileLayer = null;
 let points = [];
 let routeLines = [];        // Static background route lines
-let routeSegments = [];     // Raw GPS coordinate arrays per segment
+let routeSegments = [];     // Exactly (points.length - 1) segment arrays!
 let vehicleMarker = null;
 let progressiveTrail = null; // Single progressive trail line
 let isPlaying = false;
@@ -817,6 +823,11 @@ let editingPointId = null;
 let panelVisible = true;
 let hudVisible = true;
 let hotkeysVisible = true;
+
+// Concurrency & Debouncing Control
+let routeCalcCounter = 0;
+let recalcDebounceTimer = null;
+const routeGeometryCache = new Map();
 
 // Active settings - DEFAULT FRAME IS FREE (FULL SCREEN)
 let settings = {
@@ -839,6 +850,7 @@ let settings = {
     frameMode: 'free', // 'free' is default (NO FRAME/NO CUT)
     frameOpacity: 70,
     mapTile: 'osm', // 100% Free OpenStreetMap as safe default
+    loopRoute: false, // Default false: stop cleanly at destination!
 
     // Distance Badge
     showDistanceBadge: true,
@@ -1013,34 +1025,27 @@ function showToast(text) {
 
 // Initialize Application
 function init() {
-    // Leaflet map setup
     map = L.map('map', { 
         zoomControl: false, 
         attributionControl: false 
     }).setView([-34.6037, -58.3816], 13);
 
-    // Initial tile layer: OpenStreetMap (100% free)
     setMapTile('osm');
-
-    // Controls
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // Events
     map.on('click', onMapClick);
     map.on('dblclick', onMapDblClick);
-    map.doubleClickZoom.disable(); // Use double click for quick waypoint creation!
+    map.doubleClickZoom.disable();
 
     document.addEventListener('keydown', onKeyDown);
     setupDragAndDrop();
 
-    // Render presets UI
     renderVehiclePresets();
     loadFromStorage();
     populateLineSelect();
     updatePlayButton();
     updateVehiclePreview();
 
-    // Ensure initial framing is STRICTLY free (NO frame shown by default)
     setFrameMode('free', false);
 }
 
@@ -1143,7 +1148,7 @@ function setTab(tabName) {
     });
 }
 
-// Aspect Ratio Framing (9:16, 1:1, 16:9, Free) - NO obstructive label in the recording zone!
+// Aspect Ratio Framing (9:16, 1:1, 16:9, Free)
 function setFrameMode(mode, notify) {
     if (notify === undefined) notify = true;
     settings.frameMode = mode || 'free';
@@ -1441,8 +1446,8 @@ function setMode(mode) {
     }
 }
 
-// Add Point Logic
-function addPoint(lat, lng, customProps) {
+// Add Point Logic - Supports bulk loading with skipRecalc to prevent concurrent race conditions!
+function addPoint(lat, lng, customProps, skipRecalc) {
     const id = Date.now() + Math.random();
     const num = points.length + 1;
     
@@ -1452,7 +1457,8 @@ function addPoint(lat, lng, customProps) {
         image: '',
         showOverlay: false,
         pauseHere: false,
-        pauseDuration: 3
+        pauseDuration: 3,
+        customSegmentCoords: null
     }, customProps);
 
     const marker = L.marker([lat, lng], {
@@ -1466,7 +1472,8 @@ function addPoint(lat, lng, customProps) {
         if (p) {
             p.lat = e.target.getLatLng().lat;
             p.lng = e.target.getLatLng().lng;
-            await recalculateRoutes();
+            p.customSegmentCoords = null; // Re-fetch road routing when dragged
+            scheduleRecalculateRoutes(30);
             renderPointsList();
         }
     });
@@ -1484,12 +1491,15 @@ function addPoint(lat, lng, customProps) {
         image: props.image,
         showOverlay: props.showOverlay,
         pauseHere: props.pauseHere,
-        pauseDuration: props.pauseDuration
+        pauseDuration: props.pauseDuration,
+        customSegmentCoords: props.customSegmentCoords
     });
 
     updatePointStyles();
     renderPointsList();
-    recalculateRoutes();
+    if (!skipRecalc) {
+        scheduleRecalculateRoutes(40);
+    }
     updatePlayButton();
 }
 
@@ -1586,7 +1596,7 @@ function movePoint(id, dir) {
     points.forEach((p, i) => { p.num = i + 1; });
     updatePointStyles();
     renderPointsList();
-    recalculateRoutes();
+    scheduleRecalculateRoutes(30);
 }
 
 function reverseRoute() {
@@ -1595,7 +1605,7 @@ function reverseRoute() {
     points.forEach((p, i) => { p.num = i + 1; });
     updatePointStyles();
     renderPointsList();
-    recalculateRoutes();
+    scheduleRecalculateRoutes(30);
 }
 
 // Point Modal Edit Logic
@@ -1688,61 +1698,98 @@ function removePoint(id) {
     points.forEach((p, i) => { p.num = i + 1; });
     updatePointStyles();
     renderPointsList();
-    recalculateRoutes();
+    scheduleRecalculateRoutes(30);
     updatePlayButton();
 }
 
-// Routing & Geometry Calculation (OSRM)
-async function recalculateRoutes() {
-    routeLines.forEach(l => map.removeLayer(l));
-    routeLines = [];
-    routeSegments = [];
+// Debounced Recalculate Scheduler
+function scheduleRecalculateRoutes(delayMs = 50) {
+    if (recalcDebounceTimer) clearTimeout(recalcDebounceTimer);
+    return new Promise((resolve) => {
+        recalcDebounceTimer = setTimeout(async () => {
+            await recalculateRoutes();
+            resolve();
+        }, delayMs);
+    });
+}
 
-    if (points.length < 2) return;
+// Robust, Atomic Route Recalculation (100% Race-Condition Immune)
+async function recalculateRoutes() {
+    const calcId = ++routeCalcCounter;
+
+    if (points.length < 2) {
+        routeLines.forEach(l => map.removeLayer(l));
+        routeLines = [];
+        routeSegments = [];
+        updatePlayButton();
+        return;
+    }
+
+    const newSegments = [];
+    const newLines = [];
 
     for (let i = 0; i < points.length - 1; i++) {
+        if (calcId !== routeCalcCounter) return; // Superseded by a newer calculation!
+
         const from = points[i];
         const to = points[i + 1];
 
+        // 1. Custom GPS track geometry if available
         if (from.customSegmentCoords && from.customSegmentCoords.length > 1) {
-            routeSegments.push(from.customSegmentCoords);
+            newSegments.push(from.customSegmentCoords);
             const polyline = L.polyline(from.customSegmentCoords, {
                 color: settings.routeColor,
                 weight: settings.routeWidth,
                 opacity: 0.85,
                 lineCap: 'round',
                 lineJoin: 'round'
-            }).addTo(map);
-            routeLines.push(polyline);
+            });
+            newLines.push(polyline);
             continue;
         }
 
-        try {
-            const coords = await fetchRoute(from.lng, from.lat, to.lng, to.lat);
-            if (coords && coords.length > 0) {
-                routeSegments.push(coords);
-                const polyline = L.polyline(coords, {
-                    color: settings.routeColor,
-                    weight: settings.routeWidth,
-                    opacity: 0.85,
-                    lineCap: 'round',
-                    lineJoin: 'round'
-                }).addTo(map);
-                routeLines.push(polyline);
+        // 2. Check pairwise cache
+        const cacheKey = `${from.lat.toFixed(5)},${from.lng.toFixed(5)}_${to.lat.toFixed(5)},${to.lng.toFixed(5)}`;
+        let coords = routeGeometryCache.get(cacheKey);
+
+        if (!coords) {
+            try {
+                coords = await fetchRoute(from.lng, from.lat, to.lng, to.lat);
+                if (coords && coords.length > 0) {
+                    routeGeometryCache.set(cacheKey, coords);
+                }
+            } catch (e) {
+                console.warn('OSRM route error, fallback to straight line:', e);
             }
-        } catch (e) {
-            console.warn('OSRM error, falling back to straight line:', e);
-            const straight = [[from.lat, from.lng], [to.lat, to.lng]];
-            routeSegments.push(straight);
-            const polyline = L.polyline(straight, {
-                color: settings.routeColor,
-                weight: settings.routeWidth,
-                opacity: 0.6,
-                dashArray: '8, 8'
-            }).addTo(map);
-            routeLines.push(polyline);
         }
+
+        if (calcId !== routeCalcCounter) return;
+
+        if (!coords || coords.length === 0) {
+            coords = [[from.lat, from.lng], [to.lat, to.lng]];
+        }
+
+        newSegments.push(coords);
+        const polyline = L.polyline(coords, {
+            color: settings.routeColor,
+            weight: settings.routeWidth,
+            opacity: 0.85,
+            lineCap: 'round',
+            lineJoin: 'round'
+        });
+        newLines.push(polyline);
     }
+
+    if (calcId !== routeCalcCounter) return;
+
+    // Atomic update: only replace global arrays once all segments are completely resolved!
+    routeLines.forEach(l => map.removeLayer(l));
+    routeSegments = newSegments;
+    routeLines = newLines;
+
+    newLines.forEach(l => l.addTo(map));
+    applyRouteRenderMode();
+    updatePlayButton();
 }
 
 async function fetchRoute(lon1, lat1, lon2, lat2) {
@@ -1829,7 +1876,7 @@ function haversine(a, b) {
     return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-// ANIMATION ENGINE - VIBRATION-FREE & PROPORTIONAL AT ANY ZOOM
+// ANIMATION ENGINE - VIBRATION-FREE, LINEAR SEQUENCE FROM START TO END
 let animationState = {
     startTime: null,
     pausedTime: 0,
@@ -1873,11 +1920,9 @@ function stopAnimation() {
         progressiveTrail = null;
     }
 
-    // Restore full route lines
     applyRouteRenderMode();
     routeLines.forEach(l => l.setStyle({ opacity: 0.85 }));
 
-    // Reset UI
     document.getElementById('play-icon').textContent = '▶';
     document.getElementById('play-text').textContent = 'Iniciar Recorrido (Espacio)';
     document.getElementById('hud-play-icon').textContent = '▶';
@@ -1892,7 +1937,6 @@ function stopAnimation() {
     document.getElementById('progress-fill').style.width = '0%';
     document.getElementById('floating-km-badge').classList.add('hidden');
 
-    // Restore Quick HUD and hotkeys banner if they were hidden
     const hud = document.getElementById('quick-hud');
     if (hudVisible && hud) hud.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-8');
     const banner = document.getElementById('hotkeys-banner');
@@ -1902,12 +1946,27 @@ function stopAnimation() {
 }
 
 async function startAnimation() {
+    if (points.length < 2) return;
+
+    // Safety validation: ensure segments exist and match points sequence exactly
+    if (routeSegments.length !== points.length - 1) {
+        await recalculateRoutes();
+    }
+
+    if (routeSegments.length === 0) {
+        showToast('Calculando recorrido...');
+        await recalculateRoutes();
+    }
+
+    if (routeSegments.length !== points.length - 1) {
+        showToast('Error al conectar los puntos de la ruta.');
+        return;
+    }
+
     isPlaying = true;
 
-    // Check auto-hide interface setting (for 100% clean video recording!)
     if (document.getElementById('auto-hide-panel').checked) {
         if (panelVisible) togglePanel();
-        // Also hide HUD and hotkeys banner automatically during playback
         const hud = document.getElementById('quick-hud');
         if (hud) hud.classList.add('opacity-0', 'pointer-events-none', '-translate-y-8');
         const banner = document.getElementById('hotkeys-banner');
@@ -1915,7 +1974,6 @@ async function startAnimation() {
         showToast('▶ Grabación limpia: pulsa Espacio para pausar, o U para controles');
     }
 
-    // Update play buttons
     document.getElementById('play-icon').textContent = '⏹';
     document.getElementById('play-text').textContent = 'Detener Recorrido';
     document.getElementById('hud-play-icon').textContent = '⏹';
@@ -1926,14 +1984,19 @@ async function startAnimation() {
 
     document.getElementById('progress-bar').classList.remove('hidden');
 
-    // Compile entire route coordinates & cumulative distances
+    // Compile entire route coordinates & cumulative distances linearly without jumps
     const allCoords = [];
     const pointDistances = [0];
     let totalDist = 0;
 
-    for (let seg of routeSegments) {
+    for (let s = 0; s < routeSegments.length; s++) {
+        const seg = routeSegments[s];
         for (let i = 0; i < seg.length; i++) {
-            if (i === 0 && allCoords.length > 0) continue;
+            if (i === 0 && allCoords.length > 0) {
+                const prev = allCoords[allCoords.length - 1];
+                const d = haversine(prev, seg[0]);
+                if (d < 0.05) continue; // Skip identical junction point
+            }
             allCoords.push(seg[i]);
             if (allCoords.length > 1) {
                 const d = haversine(allCoords[allCoords.length - 2], seg[i]);
@@ -1948,15 +2011,12 @@ async function startAnimation() {
         return;
     }
 
-    // Hide or dim static route lines according to mode
     applyRouteRenderMode();
 
-    // Hide waypoints during progressive animation for clean cinematic look
     if (settings.routeRenderMode === 'progressive-pure') {
         points.forEach(p => map.removeLayer(p.marker));
     }
 
-    // Initial vehicle angle
     let initialAngle = 0;
     if (allCoords.length >= 2) {
         const dLat = allCoords[1][0] - allCoords[0][0];
@@ -1964,7 +2024,6 @@ async function startAnimation() {
         initialAngle = Math.atan2(dLng, dLat) * 180 / Math.PI;
     }
 
-    // Create progressive trail polyline
     progressiveTrail = L.polyline([allCoords[0]], {
         color: settings.routeColor,
         weight: settings.routeWidth,
@@ -1974,7 +2033,6 @@ async function startAnimation() {
         className: 'route-trail-glow'
     }).addTo(map);
 
-    // Initial vehicle position - DOM created ONCE to avoid 60fps vibration!
     const size = settings.vehicleSize;
     vehicleMarker = L.marker(allCoords[0], {
         icon: L.divIcon({
@@ -1986,7 +2044,6 @@ async function startAnimation() {
         zIndexOffset: 1000
     }).addTo(map);
 
-    // Setup distance badge
     const badge = document.getElementById('floating-km-badge');
     if (settings.showDistanceBadge) {
         badge.classList.remove('hidden');
@@ -2003,7 +2060,6 @@ async function startAnimation() {
         }
     }
 
-    // Animation state
     animationState = {
         startTime: performance.now(),
         pausedTime: 0,
@@ -2020,12 +2076,10 @@ async function startAnimation() {
         hasCameraInit: false
     };
 
-    // Center camera initially
     if (settings.cameraMode !== 'static') {
         map.setView(allCoords[0], map.getZoom(), { animate: false });
     }
 
-    // Handle Start Overlay
     if (settings.showStartOverlay && (settings.startTitle || settings.startText || settings.startImage)) {
         animationState.isPaused = true;
         animationState.pauseStart = performance.now();
@@ -2033,7 +2087,6 @@ async function startAnimation() {
         showCenterOverlay(settings.startTitle, settings.startText, settings.startImage);
     }
 
-    // Start RAF
     animateFrame();
 }
 
@@ -2042,9 +2095,8 @@ function animateFrame() {
 
     const now = performance.now();
     const elapsed = (now - animationState.startTime) / 1000;
-    const effectiveElapsed = elapsed - animationState.pausedTime;
 
-    // Handle Pauses (Start overlay, point pauses, etc.)
+    // Handle Pauses
     if (animationState.isPaused) {
         if (now < animationState.pauseUntil) {
             animationId = requestAnimationFrame(animateFrame);
@@ -2056,6 +2108,7 @@ function animateFrame() {
         document.getElementById('center-content').classList.remove('active');
     }
 
+    const effectiveElapsed = elapsed - animationState.pausedTime;
     const progress = Math.min(effectiveElapsed / settings.totalDuration, 1);
     document.getElementById('progress-fill').style.width = (progress * 100) + '%';
     const targetDist = progress * animationState.totalDistance;
@@ -2077,7 +2130,6 @@ function animateFrame() {
                 from[0] + (to[0] - from[0]) * segProgress,
                 from[1] + (to[1] - from[1]) * segProgress
             ];
-            // Heading angle: dLng (X), dLat (Y)
             const dLat = to[0] - from[0];
             const dLng = to[1] - from[1];
             rawAngle = Math.atan2(dLng, dLat) * 180 / Math.PI;
@@ -2091,12 +2143,12 @@ function animateFrame() {
 
     animationState.currentPos = currentPos;
 
-    // Smooth rotational lerp (eliminates angular twitching and vehicle vibration!)
+    // Rotational lerp
     let angleDiff = (rawAngle - animationState.currentAngle + 180) % 360 - 180;
     if (angleDiff < -180) angleDiff += 360;
     animationState.currentAngle += angleDiff * 0.18;
 
-    // Update vehicle position directly via translate3d without recreating marker DOM
+    // Update vehicle position directly via translate3d
     vehicleMarker.setLatLng(currentPos);
     const markerEl = vehicleMarker.getElement();
     if (markerEl) {
@@ -2106,14 +2158,14 @@ function animateFrame() {
         }
     }
 
-    // 100% Progressive Trail: Single crisp continuous polyline
+    // 100% Progressive Trail
     if (progressiveTrail) {
         const trailCoords = animationState.allCoords.slice(0, currentIdx);
         trailCoords.push(currentPos);
         progressiveTrail.setLatLngs(trailCoords);
     }
 
-    // Update Live Distance Badge
+    // Live Distance Badge
     if (settings.showDistanceBadge) {
         const badge = document.getElementById('floating-km-badge');
         let distVal = targetDist;
@@ -2127,15 +2179,13 @@ function animateFrame() {
         }
     }
 
-    // VIBRATION-FREE CAMERA TRACKING (Centered at ANY Zoom Level!)
+    // Camera Tracking
     if (settings.cameraMode !== 'static') {
         const currentZoom = map.getZoom();
 
         if (settings.cameraMode === 'centered') {
-            // Direct Centered: strictly places the vehicle in the dead center at ANY zoom!
             map.setView(currentPos, currentZoom, { animate: false });
         } else if (settings.cameraMode === 'cinematic-ahead') {
-            // Proportional Look-Ahead: exactly 45 SCREEN PIXELS ahead regardless of zoom!
             const rad = animationState.currentAngle * Math.PI / 180;
             const aheadPixels = 45;
             const vehiclePx = map.latLngToContainerPoint(currentPos);
@@ -2150,7 +2200,6 @@ function animateFrame() {
             animationState.camLng += (targetAheadLatLng.lng - animationState.camLng) * smoothFactor;
             map.setView([animationState.camLat, animationState.camLng], currentZoom, { animate: false });
         } else {
-            // Cinematic-Smooth: gentle exponential lerp centered on vehicle
             const smoothFactor = 0.04 + (settings.cameraSmoothness / 10) * 0.16;
             animationState.camLat += (currentPos[0] - animationState.camLat) * smoothFactor;
             animationState.camLng += (currentPos[1] - animationState.camLng) * smoothFactor;
@@ -2158,7 +2207,7 @@ function animateFrame() {
         }
     }
 
-    // Milestone / Point Triggering (Individual Overlays & Individual Pauses!)
+    // Milestone / Point Triggering
     for (let i = animationState.currentPointIndex + 1; i < points.length; i++) {
         if (targetDist >= animationState.pointDistances[i]) {
             animationState.currentPointIndex = i;
@@ -2181,16 +2230,26 @@ function animateFrame() {
         }
     }
 
-    // Finished
+    // Destination Reached
     if (progress >= 1) {
         if (settings.showEndOverlay && (settings.endTitle || settings.endText || settings.endImage)) {
             showCenterOverlay(settings.endTitle, settings.endText, settings.endImage);
             setTimeout(() => {
                 document.getElementById('center-content').classList.remove('active');
-                stopAnimation();
+                if (settings.loopRoute) {
+                    startAnimation();
+                } else {
+                    stopAnimation();
+                }
             }, (settings.endDuration || 3) * 1000);
         } else {
-            setTimeout(() => stopAnimation(), 1200);
+            setTimeout(() => {
+                if (settings.loopRoute) {
+                    startAnimation();
+                } else {
+                    stopAnimation();
+                }
+            }, 1000);
         }
         return;
     }
@@ -2434,9 +2493,10 @@ function loadParsedGPSRoute(rawCoords, routeName) {
         addPoint(coord[0], coord[1], {
             title: s === 0 ? 'Inicio (' + routeName + ')' : (s === sampleIndices.length - 1 ? 'Destino' : ('Hito ' + (s + 1))),
             customSegmentCoords: segSlice
-        });
+        }, true); // skipRecalc in loop!
     }
 
+    recalculateRoutes(); // Calculate once!
     fitBounds();
     showToast(`Ruta "${routeName}" importada (${rawCoords.length} puntos GPS)`);
 }
@@ -2528,7 +2588,6 @@ function loadBranchData(lineId, branchId) {
 
     if (branch.settings) {
         Object.assign(settings, branch.settings);
-        // Default frameMode to free unless explicitly stored
         settings.frameMode = 'free';
         
         document.getElementById('duration-slider').value = settings.totalDuration;
@@ -2543,6 +2602,9 @@ function loadBranchData(lineId, branchId) {
         document.getElementById('camera-mode-select').value = settings.cameraMode || 'centered';
         document.getElementById('cam-smooth-slider').value = settings.cameraSmoothness || 5;
         document.getElementById('show-distance-badge').checked = settings.showDistanceBadge !== false;
+        if (document.getElementById('loop-route')) {
+            document.getElementById('loop-route').checked = !!settings.loopRoute;
+        }
         
         setMapTile(settings.mapTile || 'osm');
         setFrameMode('free', false);
@@ -2564,9 +2626,11 @@ function loadBranchData(lineId, branchId) {
                 image: p.image,
                 showOverlay: p.showOverlay,
                 pauseHere: p.pauseHere,
-                pauseDuration: p.pauseDuration
-            });
+                pauseDuration: p.pauseDuration,
+                customSegmentCoords: p.customSegmentCoords
+            }, true); // skipRecalc = true in bulk loop!
         });
+        recalculateRoutes(); // Recalculate once atomically!
         fitBounds();
     }
 }
@@ -2603,7 +2667,8 @@ function saveCurrentBranch() {
         image: p.image,
         showOverlay: p.showOverlay,
         pauseHere: p.pauseHere,
-        pauseDuration: p.pauseDuration
+        pauseDuration: p.pauseDuration,
+        customSegmentCoords: p.customSegmentCoords
     }));
     linesData[lineId].branches[branchId].settings = { ...settings };
 
@@ -2630,7 +2695,7 @@ function deleteCurrentBranch() {
 
 function exportData() {
     const exportObj = {
-        version: '2.1',
+        version: '2.2',
         exportedAt: new Date().toISOString(),
         settings: settings,
         currentPoints: points.map(p => ({
@@ -2641,7 +2706,8 @@ function exportData() {
             image: p.image,
             showOverlay: p.showOverlay,
             pauseHere: p.pauseHere,
-            pauseDuration: p.pauseDuration
+            pauseDuration: p.pauseDuration,
+            customSegmentCoords: p.customSegmentCoords
         })),
         lines: linesData
     };
@@ -2677,7 +2743,6 @@ function fitBounds() {
     map.fitBounds(group.getBounds().pad(0.22));
 }
 
-// Start application
 window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
