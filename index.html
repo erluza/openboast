@@ -43,6 +43,8 @@
             justify-content: center;
         }
         .vehicle-content {
+            width: 100%;
+            height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -51,8 +53,12 @@
             will-change: transform;
         }
         .vehicle-circle {
-            width: 44px; height: 44px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             border: 3px solid white;
             box-shadow: 0 4px 14px rgba(0,0,0,0.35);
         }
@@ -241,6 +247,13 @@
         <span id="hud-play-text">Iniciar (Espacio)</span>
     </button>
     <div class="h-4 w-[1px] bg-white/20"></div>
+    <button id="hud-undo-btn" onclick="undo()" class="px-2 py-1.5 hover:bg-white/10 rounded-xl text-xs font-bold text-gray-300 hover:text-white transition-all disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1" title="Deshacer (Ctrl+Z)" disabled>
+        <span>↶</span> <span class="hidden sm:inline text-[10px]">Ctrl+Z</span>
+    </button>
+    <button id="hud-redo-btn" onclick="redo()" class="px-2 py-1.5 hover:bg-white/10 rounded-xl text-xs font-bold text-gray-300 hover:text-white transition-all disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1" title="Rehacer (Ctrl+Y)" disabled>
+        <span>↷</span> <span class="hidden sm:inline text-[10px]">Ctrl+Y</span>
+    </button>
+    <div class="h-4 w-[1px] bg-white/20"></div>
     <button onclick="cycleFrameMode()" id="hud-frame-btn" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-xs font-medium text-gray-300 hover:text-white flex items-center gap-1" title="Cambiar formato de pantalla (M)">
         <span>📱</span> <span id="hud-frame-text">Libre</span>
     </button>
@@ -261,11 +274,15 @@
     <span class="font-extrabold text-amber-400 flex items-center gap-1">⌨️ Atajos:</span>
     <span><kbd class="px-1.5 py-0.5 bg-white/20 rounded font-mono text-[10px] text-amber-200">Espacio</kbd> Iniciar</span>
     <span class="text-white/30">•</span>
+    <span><kbd class="px-1.5 py-0.5 bg-white/20 rounded font-mono text-[10px] text-amber-200">Ctrl+Z</kbd> Deshacer</span>
+    <span class="text-white/30">•</span>
+    <span><kbd class="px-1.5 py-0.5 bg-white/20 rounded font-mono text-[10px] text-amber-200">Ctrl+Y</kbd> Rehacer</span>
+    <span class="text-white/30">•</span>
     <span><kbd class="px-1.5 py-0.5 bg-white/20 rounded font-mono text-[10px] text-amber-200">H</kbd> Panel</span>
     <span class="text-white/30">•</span>
-    <span><kbd class="px-1.5 py-0.5 bg-white/20 rounded font-mono text-[10px] text-amber-200">U</kbd> Ocultar HUD</span>
+    <span><kbd class="px-1.5 py-0.5 bg-white/20 rounded font-mono text-[10px] text-amber-200">U</kbd> HUD</span>
     <span class="text-white/30">•</span>
-    <span><kbd class="px-1.5 py-0.5 bg-white/20 rounded font-mono text-[10px] text-amber-200">M</kbd> Marco (9:16)</span>
+    <span><kbd class="px-1.5 py-0.5 bg-white/20 rounded font-mono text-[10px] text-amber-200">M</kbd> Marco</span>
     <span class="text-white/30">•</span>
     <span><kbd class="px-1.5 py-0.5 bg-white/20 rounded font-mono text-[10px] text-amber-200">F</kbd> Pantalla completa</span>
     <button onclick="toggleHotkeysBanner()" class="ml-1 text-gray-400 hover:text-white font-bold text-xs" title="Cerrar barra de atajos">✕</button>
@@ -355,12 +372,20 @@
                     <input type="text" id="branch-name" placeholder="Nombre del ramal (ej: Constitución - Tigre)" class="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs">
                 </div>
 
-                <div class="flex gap-2 pt-1">
-                    <button onclick="saveCurrentBranch()" class="flex-1 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm">
-                        💾 Guardar Ramal
+                <div class="flex gap-1.5 pt-1">
+                    <button onclick="saveCurrentBranch()" class="flex-1 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm flex items-center justify-center gap-1" title="Guardar estado del ramal actual">
+                        💾 <span>Guardar</span>
                     </button>
-                    <button onclick="deleteCurrentBranch()" class="px-3 py-1.5 bg-white text-red-600 border border-red-200 rounded-xl text-xs font-bold hover:bg-red-50 transition-colors" title="Eliminar ramal actual">
+                    <button onclick="reloadCurrentBranchFromStorage()" class="flex-1 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm flex items-center justify-center gap-1" title="Cargar / Revertir ramal desde su último estado guardado">
+                        📂 <span>Cargar</span>
+                    </button>
+                    <button onclick="deleteCurrentBranch()" class="px-2.5 py-1.5 bg-white text-red-600 border border-red-200 rounded-xl text-xs font-bold hover:bg-red-50 transition-colors" title="Eliminar ramal actual">
                         🗑️
+                    </button>
+                </div>
+                <div id="last-saved-banner" class="pt-0.5 text-center hidden">
+                    <button onclick="loadLastSavedBranch(false)" class="text-[11px] font-semibold text-blue-600 hover:text-blue-800 underline flex items-center justify-center gap-1 w-full">
+                        <span>↺ Restaurar último guardado:</span> <span id="last-saved-name" class="font-bold"></span>
                     </button>
                 </div>
             </div>
@@ -379,8 +404,18 @@
             <!-- Points List -->
             <div>
                 <div class="flex items-center justify-between mb-2">
-                    <h2 class="text-xs font-extrabold text-gray-700 uppercase tracking-wider">Hitos del Recorrido</h2>
-                    <span id="point-count" class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-black">0</span>
+                    <div class="flex items-center gap-1.5">
+                        <h2 class="text-xs font-extrabold text-gray-700 uppercase tracking-wider">Hitos</h2>
+                        <span id="point-count" class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-black">0</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button id="undo-btn" onclick="undo()" class="px-2 py-1 bg-white hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-bold border border-gray-200 transition-all disabled:opacity-35 disabled:pointer-events-none flex items-center gap-1 shadow-sm" title="Deshacer (Ctrl+Z)" disabled>
+                            <span>↶</span> <span>Deshacer</span>
+                        </button>
+                        <button id="redo-btn" onclick="redo()" class="px-2 py-1 bg-white hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-bold border border-gray-200 transition-all disabled:opacity-35 disabled:pointer-events-none flex items-center gap-1 shadow-sm" title="Rehacer (Ctrl+Y)" disabled>
+                            <span>↷</span> <span>Rehacer</span>
+                        </button>
+                    </div>
                 </div>
                 <div id="points-list" class="space-y-2">
                     <div class="text-center py-8 text-gray-400 text-xs italic bg-gray-50 rounded-2xl border border-dashed border-gray-200">
@@ -448,6 +483,16 @@
                 <div class="flex items-center justify-between">
                     <label for="rotate-vehicle" class="text-xs font-medium text-gray-700">Rotar suavemente con la dirección</label>
                     <input type="checkbox" id="rotate-vehicle" checked onchange="updateVehicleSettings()" class="w-4 h-4 text-blue-600 rounded">
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <label for="vehicle-angle-offset" class="text-xs font-medium text-gray-700">Orientación del vehículo</label>
+                    <select id="vehicle-angle-offset" onchange="updateVehicleAngleOffset(this.value)" class="px-2 py-1 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700">
+                        <option value="0">0° (Al frente - Estándar)</option>
+                        <option value="90">+90° (Hacia la derecha)</option>
+                        <option value="180">180° (Invertido / Reversa)</option>
+                        <option value="270">270° (-90° Izquierda)</option>
+                    </select>
                 </div>
 
                 <div class="flex items-center justify-between">
@@ -829,6 +874,12 @@ let routeCalcCounter = 0;
 let recalcDebounceTimer = null;
 const routeGeometryCache = new Map();
 
+// Undo / Redo History (Ctrl+Z / Ctrl+Y)
+let undoStack = [];
+let redoStack = [];
+let isPerformingUndoRedo = false;
+let lastDragSnapshot = null;
+
 // Active settings - DEFAULT FRAME IS FREE (FULL SCREEN)
 let settings = {
     // Styling & Vehicle
@@ -838,6 +889,7 @@ let settings = {
     totalDuration: 35,
     vehicle: 'van',
     vehicleSize: 42,
+    vehicleAngleOffset: 0,
     customVehicleUrl: '',
     customText: '',
     rotateVehicle: true,
@@ -1010,6 +1062,7 @@ const vehicleNames = {
 // Toast Notifications Helper
 let toastTimer = null;
 function showToast(text) {
+    if (isPlaying) return; // Do not obstruct screen during recording/playback!
     const toast = document.getElementById('toast-notification');
     const toastText = document.getElementById('toast-text');
     if (!toast || !toastText) return;
@@ -1021,6 +1074,18 @@ function showToast(text) {
         toast.classList.remove('opacity-100', 'translate-y-0');
         toast.classList.add('opacity-0', '-translate-y-4');
     }, 1800);
+}
+
+function hideToast() {
+    const toast = document.getElementById('toast-notification');
+    if (toast) {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', '-translate-y-4');
+    }
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+        toastTimer = null;
+    }
 }
 
 // Initialize Application
@@ -1043,8 +1108,11 @@ function init() {
     renderVehiclePresets();
     loadFromStorage();
     populateLineSelect();
+    loadLastSavedBranch(true); // Silent autoload of last saved branch without toast!
     updatePlayButton();
     updateVehiclePreview();
+    updateLastSavedBanner();
+    updateUndoRedoUI();
 
     setFrameMode('free', false);
 }
@@ -1067,6 +1135,20 @@ function setMapTile(tileKey) {
 // Keyboard shortcuts
 function onKeyDown(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        return;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (e.shiftKey) {
+            redo();
+        } else {
+            undo();
+        }
+        return;
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault();
+        redo();
         return;
     }
 
@@ -1306,6 +1388,11 @@ function updateVehicleSettings() {
     if (vehicleMarker) updateVehicleMarkerIcon();
 }
 
+function updateVehicleAngleOffset(val) {
+    settings.vehicleAngleOffset = parseInt(val) || 0;
+    if (vehicleMarker) updateVehicleMarkerIcon();
+}
+
 function updateVehicleSize(val) {
     settings.vehicleSize = parseInt(val);
     document.getElementById('veh-size-display').textContent = val + 'px';
@@ -1420,6 +1507,98 @@ function handleEndImageFile(input) {
     input.value = '';
 }
 
+// Undo / Redo Management (Ctrl+Z / Ctrl+Y)
+function getPointsSnapshot() {
+    return JSON.stringify(points.map(p => ({
+        lat: p.lat,
+        lng: p.lng,
+        title: p.title || '',
+        text: p.text || '',
+        image: p.image || '',
+        showOverlay: !!p.showOverlay,
+        pauseHere: !!p.pauseHere,
+        pauseDuration: p.pauseDuration || 3,
+        customSegmentCoords: p.customSegmentCoords ? p.customSegmentCoords.map(c => [c[0], c[1]]) : null
+    })));
+}
+
+function pushHistory() {
+    if (isPerformingUndoRedo) return;
+    const snap = getPointsSnapshot();
+    if (undoStack.length > 0 && undoStack[undoStack.length - 1] === snap) return;
+    undoStack.push(snap);
+    if (undoStack.length > 50) undoStack.shift();
+    redoStack = [];
+    updateUndoRedoUI();
+}
+
+function updateUndoRedoUI() {
+    const uBtn = document.getElementById('undo-btn');
+    const rBtn = document.getElementById('redo-btn');
+    const hudUBtn = document.getElementById('hud-undo-btn');
+    const hudRBtn = document.getElementById('hud-redo-btn');
+    
+    const canUndo = undoStack.length > 0;
+    const canRedo = redoStack.length > 0;
+    
+    if (uBtn) uBtn.disabled = !canUndo;
+    if (rBtn) rBtn.disabled = !canRedo;
+    if (hudUBtn) hudUBtn.disabled = !canUndo;
+    if (hudRBtn) hudRBtn.disabled = !canRedo;
+}
+
+function undo() {
+    if (undoStack.length === 0) return;
+    const currentSnap = getPointsSnapshot();
+    redoStack.push(currentSnap);
+    const targetSnap = undoStack.pop();
+    applyHistorySnapshot(targetSnap);
+    updateUndoRedoUI();
+    showToast('↶ Acción deshecha (Ctrl+Z)');
+}
+
+function redo() {
+    if (redoStack.length === 0) return;
+    const currentSnap = getPointsSnapshot();
+    undoStack.push(currentSnap);
+    const targetSnap = redoStack.pop();
+    applyHistorySnapshot(targetSnap);
+    updateUndoRedoUI();
+    showToast('↷ Acción rehecha (Ctrl+Y)');
+}
+
+function applyHistorySnapshot(snapshotJson) {
+    if (!snapshotJson) return;
+    isPerformingUndoRedo = true;
+    try {
+        const rawList = JSON.parse(snapshotJson);
+        // Clear current markers from map
+        points.forEach(p => map.removeLayer(p.marker));
+        points = [];
+        
+        rawList.forEach(p => {
+            addPoint(p.lat, p.lng, {
+                title: p.title,
+                text: p.text,
+                image: p.image,
+                showOverlay: p.showOverlay,
+                pauseHere: p.pauseHere,
+                pauseDuration: p.pauseDuration,
+                customSegmentCoords: p.customSegmentCoords
+            }, true);
+        });
+        
+        recalculateRoutes();
+        updatePointStyles();
+        renderPointsList();
+        updatePlayButton();
+    } catch (e) {
+        console.error('Error aplicando snapshot:', e);
+    } finally {
+        isPerformingUndoRedo = false;
+    }
+}
+
 // Map Click Handlers
 function onMapClick(e) {
     if (currentMode !== 'add') return;
@@ -1448,6 +1627,9 @@ function setMode(mode) {
 
 // Add Point Logic - Supports bulk loading with skipRecalc to prevent concurrent race conditions!
 function addPoint(lat, lng, customProps, skipRecalc) {
+    if (!skipRecalc && !isPerformingUndoRedo) {
+        pushHistory();
+    }
     const id = Date.now() + Math.random();
     const num = points.length + 1;
     
@@ -1467,9 +1649,22 @@ function addPoint(lat, lng, customProps, skipRecalc) {
         riseOnHover: true
     }).addTo(map);
 
+    marker.on('dragstart', () => {
+        lastDragSnapshot = getPointsSnapshot();
+    });
+
     marker.on('dragend', async (e) => {
         const p = points.find(x => x.id === id);
         if (p) {
+            if (lastDragSnapshot && lastDragSnapshot !== getPointsSnapshot()) {
+                if (undoStack.length === 0 || undoStack[undoStack.length - 1] !== lastDragSnapshot) {
+                    undoStack.push(lastDragSnapshot);
+                    if (undoStack.length > 50) undoStack.shift();
+                    redoStack = [];
+                    updateUndoRedoUI();
+                }
+                lastDragSnapshot = null;
+            }
             p.lat = e.target.getLatLng().lat;
             p.lng = e.target.getLatLng().lng;
             p.customSegmentCoords = null; // Re-fetch road routing when dragged
@@ -1592,6 +1787,7 @@ function movePoint(id, dir) {
     const newIdx = idx + dir;
     if (newIdx < 0 || newIdx >= points.length) return;
     
+    pushHistory();
     [points[idx], points[newIdx]] = [points[newIdx], points[idx]];
     points.forEach((p, i) => { p.num = i + 1; });
     updatePointStyles();
@@ -1601,6 +1797,7 @@ function movePoint(id, dir) {
 
 function reverseRoute() {
     if (points.length < 2) return;
+    pushHistory();
     points.reverse();
     points.forEach((p, i) => { p.num = i + 1; });
     updatePointStyles();
@@ -1673,6 +1870,7 @@ function savePointEdit() {
     if (!editingPointId) return;
     const p = points.find(x => x.id === editingPointId);
     if (p) {
+        pushHistory();
         p.title = document.getElementById('edit-title').value.trim();
         p.text = document.getElementById('edit-text').value.trim();
         p.image = document.getElementById('edit-image').value.trim();
@@ -1693,6 +1891,7 @@ function deletePointEdit() {
 function removePoint(id) {
     const idx = points.findIndex(x => x.id === id);
     if (idx < 0) return;
+    pushHistory();
     map.removeLayer(points[idx].marker);
     points.splice(idx, 1);
     points.forEach((p, i) => { p.num = i + 1; });
@@ -1845,7 +2044,8 @@ function buildVehicleHtml(angle) {
         content = `<span style="font-size:${Math.round(size * 0.7)}px;">🚗</span>`;
     }
 
-    const rotation = settings.rotateVehicle ? `transform: rotate(${angle + 90}deg);` : '';
+    const totalAngle = angle + (settings.vehicleAngleOffset || 0);
+    const rotation = settings.rotateVehicle ? `transform: rotate(${totalAngle}deg);` : '';
     const shadowStyle = settings.vehicleShadow ? `filter: drop-shadow(0 8px 14px rgba(0,0,0,0.45));` : '';
 
     if (settings.circleColor !== 'none') {
@@ -1954,16 +2154,16 @@ async function startAnimation() {
     }
 
     if (routeSegments.length === 0) {
-        showToast('Calculando recorrido...');
         await recalculateRoutes();
     }
 
     if (routeSegments.length !== points.length - 1) {
-        showToast('Error al conectar los puntos de la ruta.');
+        alert('No se pudieron conectar los puntos de la ruta.');
         return;
     }
 
     isPlaying = true;
+    hideToast(); // Remove any toast immediately so recording/vision is 100% clean!
 
     if (document.getElementById('auto-hide-panel').checked) {
         if (panelVisible) togglePanel();
@@ -1971,7 +2171,6 @@ async function startAnimation() {
         if (hud) hud.classList.add('opacity-0', 'pointer-events-none', '-translate-y-8');
         const banner = document.getElementById('hotkeys-banner');
         if (banner) banner.classList.add('opacity-0', 'pointer-events-none');
-        showToast('▶ Grabación limpia: pulsa Espacio para pausar, o U para controles');
     }
 
     document.getElementById('play-icon').textContent = '⏹';
@@ -2018,10 +2217,13 @@ async function startAnimation() {
     }
 
     let initialAngle = 0;
-    if (allCoords.length >= 2) {
-        const dLat = allCoords[1][0] - allCoords[0][0];
-        const dLng = allCoords[1][1] - allCoords[0][1];
-        initialAngle = Math.atan2(dLng, dLat) * 180 / Math.PI;
+    for (let i = 1; i < allCoords.length; i++) {
+        const dLat = allCoords[i][0] - allCoords[0][0];
+        const dLng = allCoords[i][1] - allCoords[0][1];
+        if (Math.abs(dLat) > 1e-6 || Math.abs(dLng) > 1e-6) {
+            initialAngle = Math.atan2(dLng, dLat) * 180 / Math.PI;
+            break;
+        }
     }
 
     progressiveTrail = L.polyline([allCoords[0]], {
@@ -2125,14 +2327,16 @@ function animateFrame() {
         const segDist = haversine(from, to);
 
         if (traveled + segDist >= targetDist) {
-            const segProgress = (targetDist - traveled) / segDist;
+            const segProgress = segDist > 0.000001 ? (targetDist - traveled) / segDist : 0;
             currentPos = [
                 from[0] + (to[0] - from[0]) * segProgress,
                 from[1] + (to[1] - from[1]) * segProgress
             ];
             const dLat = to[0] - from[0];
             const dLng = to[1] - from[1];
-            rawAngle = Math.atan2(dLng, dLat) * 180 / Math.PI;
+            if (Math.abs(dLat) > 1e-6 || Math.abs(dLng) > 1e-6) {
+                rawAngle = Math.atan2(dLng, dLat) * 180 / Math.PI;
+            }
             currentIdx = i;
             break;
         }
@@ -2154,7 +2358,8 @@ function animateFrame() {
     if (markerEl) {
         const rotator = markerEl.querySelector('.vehicle-content');
         if (rotator && settings.rotateVehicle) {
-            rotator.style.transform = `rotate(${animationState.currentAngle + 90}deg)`;
+            const rotAngle = animationState.currentAngle + (settings.vehicleAngleOffset || 0);
+            rotator.style.transform = `rotate(${rotAngle}deg)`;
         }
     }
 
@@ -2513,6 +2718,84 @@ function loadFromStorage() {
 
 function saveToStorage() {
     localStorage.setItem('travelboast_lines', JSON.stringify(linesData));
+    updateLastSavedBanner();
+}
+
+function updateLastSavedBanner() {
+    const banner = document.getElementById('last-saved-banner');
+    const nameSpan = document.getElementById('last-saved-name');
+    if (!banner || !nameSpan) return;
+    try {
+        const lastRaw = localStorage.getItem('travelboast_last_active');
+        if (lastRaw) {
+            const lastActive = JSON.parse(lastRaw);
+            if (lastActive && lastActive.lineId && lastActive.branchId && linesData[lastActive.lineId]?.branches[lastActive.branchId]) {
+                const bName = linesData[lastActive.lineId].branches[lastActive.branchId].name;
+                const lName = linesData[lastActive.lineId].name;
+                nameSpan.textContent = `${lName} - ${bName}`;
+                banner.classList.remove('hidden');
+                return;
+            }
+        }
+    } catch (e) {}
+    banner.classList.add('hidden');
+}
+
+function loadLastSavedBranch(silent = false) {
+    try {
+        const lastRaw = localStorage.getItem('travelboast_last_active');
+        let lineId = null;
+        let branchId = null;
+        if (lastRaw) {
+            const parsed = JSON.parse(lastRaw);
+            if (parsed && parsed.lineId && parsed.branchId && linesData[parsed.lineId]?.branches[parsed.branchId]) {
+                lineId = parsed.lineId;
+                branchId = parsed.branchId;
+            }
+        }
+        if (!lineId || !branchId) {
+            for (const lId in linesData) {
+                const bKeys = Object.keys(linesData[lId]?.branches || {});
+                if (bKeys.length > 0) {
+                    lineId = lId;
+                    branchId = bKeys[0];
+                    break;
+                }
+            }
+        }
+        if (!lineId || !branchId) {
+            if (!silent) alert('No hay ningún ramal guardado localmente.');
+            return false;
+        }
+        if (!silent) pushHistory();
+        currentLineId = lineId;
+        currentBranchId = branchId;
+        populateLineSelect();
+        loadBranchData(lineId, branchId);
+        updateLastSavedBanner();
+        if (!silent) showToast(`Cargado: ${linesData[lineId].branches[branchId].name}`);
+        return true;
+    } catch (e) {
+        console.error('Error cargando ramal guardado:', e);
+        return false;
+    }
+}
+
+function reloadCurrentBranchFromStorage() {
+    let lineId = document.getElementById('line-select').value || currentLineId;
+    let branchId = document.getElementById('branch-select').value || currentBranchId;
+    if (!lineId || !branchId || !linesData[lineId]?.branches[branchId]) {
+        loadLastSavedBranch(false);
+        return;
+    }
+    pushHistory();
+    currentLineId = lineId;
+    currentBranchId = branchId;
+    populateLineSelect();
+    loadBranchData(lineId, branchId);
+    localStorage.setItem('travelboast_last_active', JSON.stringify({ lineId, branchId, timestamp: Date.now() }));
+    updateLastSavedBanner();
+    showToast(`Cargado: ${linesData[lineId].branches[branchId].name}`);
 }
 
 function populateLineSelect() {
@@ -2589,6 +2872,7 @@ function loadBranchData(lineId, branchId) {
     if (branch.settings) {
         Object.assign(settings, branch.settings);
         settings.frameMode = 'free';
+        settings.vehicleAngleOffset = branch.settings.vehicleAngleOffset || 0;
         
         document.getElementById('duration-slider').value = settings.totalDuration;
         document.getElementById('duration-display').textContent = settings.totalDuration + 's';
@@ -2604,6 +2888,9 @@ function loadBranchData(lineId, branchId) {
         document.getElementById('show-distance-badge').checked = settings.showDistanceBadge !== false;
         if (document.getElementById('loop-route')) {
             document.getElementById('loop-route').checked = !!settings.loopRoute;
+        }
+        if (document.getElementById('vehicle-angle-offset')) {
+            document.getElementById('vehicle-angle-offset').value = settings.vehicleAngleOffset;
         }
         
         setMapTile(settings.mapTile || 'osm');
@@ -2675,7 +2962,9 @@ function saveCurrentBranch() {
     saveToStorage();
     currentLineId = lineId;
     currentBranchId = branchId;
+    localStorage.setItem('travelboast_last_active', JSON.stringify({ lineId, branchId, timestamp: Date.now() }));
     populateLineSelect();
+    updateLastSavedBanner();
     showToast('Ramal guardado correctamente');
 }
 
@@ -2688,9 +2977,12 @@ function deleteCurrentBranch() {
         currentLineId = null;
     }
     currentBranchId = null;
+    localStorage.removeItem('travelboast_last_active');
     saveToStorage();
     populateLineSelect();
-    clearAll();
+    clearMapOnly();
+    updateLastSavedBanner();
+    showToast('Ramal eliminado');
 }
 
 function exportData() {
@@ -2733,7 +3025,9 @@ function clearMapOnly() {
 }
 
 function clearAll() {
-    if (points.length > 0 && !confirm('¿Eliminar todos los puntos del recorrido?')) return;
+    if (points.length === 0) return;
+    if (!confirm('¿Eliminar todos los puntos del recorrido?')) return;
+    pushHistory();
     clearMapOnly();
 }
 
