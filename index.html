@@ -2238,17 +2238,6 @@ function stopAnimation() {
     });
     updatePointStyles();
 
-    // Clean up crop canvas/video loop
-    if (activeCropAnimId) {
-        cancelAnimationFrame(activeCropAnimId);
-        activeCropAnimId = null;
-    }
-    if (activeCropVideo) {
-        activeCropVideo.pause();
-        activeCropVideo.srcObject = null;
-        activeCropVideo = null;
-    }
-
     // Requirement 3: Restore cursor in DOM
     document.body.classList.remove('recording-active');
 
@@ -2262,14 +2251,13 @@ function stopAnimation() {
         hideRecordingBadge();
         if (activeMediaRecorder && activeMediaRecorder.state !== 'inactive') {
             try {
+                if (activeMediaRecorder.state === 'recording') {
+                    activeMediaRecorder.requestData();
+                }
                 activeMediaRecorder.stop();
             } catch (err) {
                 console.error('Error stopping MediaRecorder:', err);
             }
-        }
-        if (activeRecordingStream) {
-            activeRecordingStream.getTracks().forEach(track => track.stop());
-            activeRecordingStream = null;
         }
     }
 }
@@ -2796,6 +2784,7 @@ async function startRecordingWorkflow() {
 
     activeRecordingStream = stream;
     recordedVideoChunks = [];
+    isRecordingActive = true;
 
     // Requirement 4: Crop 9:16, 1:1, or 16:9 taking "Libre" full-screen as the complete reference
     let streamToRecord = stream;
@@ -2806,6 +2795,9 @@ async function startRecordingWorkflow() {
             cropVideo.srcObject = stream;
             cropVideo.muted = true;
             cropVideo.playsInline = true;
+            cropVideo.autoplay = true;
+            cropVideo.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-999;';
+            document.body.appendChild(cropVideo);
             await cropVideo.play();
 
             let attempts = 0;
@@ -2855,9 +2847,11 @@ async function startRecordingWorkflow() {
 
             function renderCropLoop() {
                 if (!isRecordingActive) return;
-                if (cropVideo && !cropVideo.paused && !cropVideo.ended) {
-                    ctx.drawImage(cropVideo, sx, sy, targetW, targetH, 0, 0, targetW, targetH);
-                }
+                try {
+                    if (cropVideo && !cropVideo.paused && !cropVideo.ended && cropVideo.videoWidth > 0) {
+                        ctx.drawImage(cropVideo, sx, sy, targetW, targetH, 0, 0, targetW, targetH);
+                    }
+                } catch(e) {}
                 activeCropAnimId = requestAnimationFrame(renderCropLoop);
             }
             renderCropLoop();
@@ -2901,7 +2895,6 @@ async function startRecordingWorkflow() {
         };
     }
 
-    isRecordingActive = true;
     activeMediaRecorder.start(250);
 
     // Launch animation on pristine screen with clean intro overlay, progressive line, and outro overlay
@@ -2916,7 +2909,12 @@ function finishAndDownloadRecording(mimeType) {
     if (activeCropVideo) {
         activeCropVideo.pause();
         activeCropVideo.srcObject = null;
+        if (activeCropVideo.parentNode) activeCropVideo.parentNode.removeChild(activeCropVideo);
         activeCropVideo = null;
+    }
+    if (activeRecordingStream) {
+        activeRecordingStream.getTracks().forEach(track => track.stop());
+        activeRecordingStream = null;
     }
     document.body.classList.remove('recording-active');
 
