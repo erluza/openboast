@@ -75,11 +75,17 @@
             box-shadow: 0 3px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.35);
             white-space: nowrap;
             pointer-events: none;
-            z-index: 999;
+            z-index: 500;
             transform: translate(-50%, 26px);
             letter-spacing: 0.2px;
             border: 1.5px solid rgba(255,255,255,0.85);
-            transition: opacity 0.2s ease;
+            transition: opacity 0.25s ease;
+        }
+
+        /* Mouse cursor hidden during recording (Requirement 3) */
+        body.recording-active,
+        body.recording-active * {
+            cursor: none !important;
         }
 
         /* Overlays */
@@ -92,7 +98,7 @@
             max-width: 360px; width: 88%;
             opacity: 0; pointer-events: none;
             transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            z-index: 500; border: 1px solid rgba(255,255,255,0.6);
+            z-index: 1100; border: 1px solid rgba(255,255,255,0.6);
         }
         .point-overlay.active {
             opacity: 1; pointer-events: auto;
@@ -113,7 +119,7 @@
             max-width: 440px; width: 90%;
             opacity: 0; pointer-events: none;
             transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
-            z-index: 600; border: 1px solid rgba(255,255,255,0.7);
+            z-index: 1200; border: 1px solid rgba(255,255,255,0.7);
             text-align: center;
         }
         .center-overlay.active {
@@ -224,8 +230,8 @@
     <p class="text-lg opacity-90">Soporta rutas GPX, KML, GeoJSON y backups de OpenBoast</p>
 </div>
 
-<!-- Overlays Container -->
-<div id="overlay-container" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:400;">
+<!-- Overlays Container (High z-index to guarantee cards render above vehicle, trails and distance badges) -->
+<div id="overlay-container" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1500;">
     <!-- Point Passing Overlay -->
     <div id="point-content" class="point-overlay">
         <img id="pc-image" src="" alt="" style="display:none;">
@@ -765,6 +771,17 @@
 
     <!-- Bottom Action Dock -->
     <div class="p-4 border-t border-gray-200/60 bg-white/70 space-y-2.5">
+        <!-- Aspect Ratio Selector for Recording (Requirement 4) -->
+        <div class="flex items-center justify-between gap-1 p-2 bg-purple-50/80 rounded-2xl border border-purple-200/80">
+            <span class="text-xs font-extrabold text-purple-900 flex items-center gap-1">📐 Corte Video:</span>
+            <div class="flex gap-1 bg-white p-0.5 rounded-xl border border-purple-200">
+                <button type="button" onclick="setRecordingAspect('free')" id="rec-aspect-free" class="px-2 py-1 rounded-lg text-[11px] font-bold bg-purple-600 text-white shadow-sm transition-all" title="Grabación completa sin recorte">Libre</button>
+                <button type="button" onclick="setRecordingAspect('9:16')" id="rec-aspect-9-16" class="px-2 py-1 rounded-lg text-[11px] font-bold text-gray-600 hover:text-purple-700 transition-all" title="Corte vertical 9:16 para Reels, TikTok y Shorts">9:16</button>
+                <button type="button" onclick="setRecordingAspect('1:1')" id="rec-aspect-1-1" class="px-2 py-1 rounded-lg text-[11px] font-bold text-gray-600 hover:text-purple-700 transition-all" title="Corte cuadrado 1:1 para Instagram">1:1</button>
+                <button type="button" onclick="setRecordingAspect('16:9')" id="rec-aspect-16-9" class="px-2 py-1 rounded-lg text-[11px] font-bold text-gray-600 hover:text-purple-700 transition-all" title="Corte panorámico 16:9 para YouTube">16:9</button>
+            </div>
+        </div>
+
         <div class="grid grid-cols-2 gap-2">
             <button id="play-btn" onclick="toggleAnimation()" disabled class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-xs shadow-lg shadow-blue-500/25 hover:shadow-xl hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
                 <span id="play-icon" class="text-sm">▶</span>
@@ -944,6 +961,7 @@ let settings = {
     mapTile: 'osm', // 100% Free OpenStreetMap as safe default
     loopRoute: false, // Default false: stop cleanly at destination!
     recordOnPlay: false, // Automatically launch recorder when pressing play
+    recordingAspect: 'free', // 'free' (default full-screen reference), '9:16', '1:1', '16:9'
 
     // Distance Badge
     showDistanceBadge: true,
@@ -1159,6 +1177,9 @@ function init() {
     }
     if (document.getElementById('record-on-play')) {
         document.getElementById('record-on-play').checked = !!settings.recordOnPlay;
+    }
+    if (document.getElementById('rec-aspect-free')) {
+        setRecordingAspect(settings.recordingAspect || 'free');
     }
 
     setFrameMode('free', false);
@@ -2217,6 +2238,24 @@ function stopAnimation() {
     });
     updatePointStyles();
 
+    // Clean up crop canvas/video loop
+    if (activeCropAnimId) {
+        cancelAnimationFrame(activeCropAnimId);
+        activeCropAnimId = null;
+    }
+    if (activeCropVideo) {
+        activeCropVideo.pause();
+        activeCropVideo.srcObject = null;
+        activeCropVideo = null;
+    }
+
+    // Requirement 3: Restore cursor in DOM
+    document.body.classList.remove('recording-active');
+
+    // Requirement 1: Restore distance badge opacity
+    const badge = document.getElementById('floating-km-badge');
+    if (badge) badge.style.opacity = '1';
+
     // Requirement 2: Cleanly stop active recording and trigger video export/download
     if (isRecordingActive) {
         isRecordingActive = false;
@@ -2417,6 +2456,8 @@ function animateFrame() {
         animationState.pausedTime += (now - animationState.pauseStart) / 1000;
         hidePointOverlay();
         document.getElementById('center-content').classList.remove('active');
+        const badge = document.getElementById('floating-km-badge');
+        if (badge && settings.showDistanceBadge && isPlaying) badge.style.opacity = '1';
     }
 
     const effectiveElapsed = elapsed - animationState.pausedTime;
@@ -2602,9 +2643,14 @@ function showPointContent(point) {
 
     overlay.classList.add('active');
 
+    // Requirement 1: Hide distance badge while overlay card is active so it never obstructs
+    const badge = document.getElementById('floating-km-badge');
+    if (badge) badge.style.opacity = '0';
+
     if (!point.pauseHere) {
         setTimeout(() => {
             overlay.classList.remove('active');
+            if (badge && settings.showDistanceBadge && isPlaying) badge.style.opacity = '1';
         }, (point.pauseDuration || 3) * 1000);
     }
 }
@@ -2612,6 +2658,11 @@ function showPointContent(point) {
 function hidePointOverlay() {
     document.getElementById('point-content').classList.remove('active');
     document.getElementById('center-content').classList.remove('active');
+    // Requirement 1: Restore distance badge opacity when overlays are hidden
+    const badge = document.getElementById('floating-km-badge');
+    if (badge && settings.showDistanceBadge && isPlaying) {
+        badge.style.opacity = '1';
+    }
 }
 
 function showCenterOverlay(title, text, image) {
@@ -2629,6 +2680,10 @@ function showCenterOverlay(title, text, image) {
         img.style.display = 'none';
     }
     overlay.classList.add('active');
+
+    // Requirement 1: Hide distance badge while center overlay is active so it never obstructs
+    const badge = document.getElementById('floating-km-badge');
+    if (badge) badge.style.opacity = '0';
 }
 
 // Requirement 1: Toggle Point Markers visibility during playback
@@ -2648,7 +2703,35 @@ function updateShowMarkersPlayback(checked) {
     }
 }
 
-// Requirement 2: Screen / Route Video Recording Engine
+// Requirement 4: Set Recording Aspect Ratio (9:16, 1:1, 16:9, Free)
+function setRecordingAspect(aspect) {
+    settings.recordingAspect = aspect || 'free';
+    const aspects = ['free', '9-16', '1-1', '16-9'];
+    aspects.forEach(a => {
+        const btn = document.getElementById('rec-aspect-' + a);
+        const rawKey = a === '9-16' ? '9:16' : (a === '1-1' ? '1:1' : (a === '16-9' ? '16:9' : 'free'));
+        if (btn) {
+            if (rawKey === settings.recordingAspect) {
+                btn.className = 'px-2 py-1 rounded-lg text-[11px] font-bold bg-purple-600 text-white shadow-sm transition-all';
+            } else {
+                btn.className = 'px-2 py-1 rounded-lg text-[11px] font-bold text-gray-600 hover:text-purple-700 transition-all';
+            }
+        }
+    });
+
+    const labels = {
+        'free': 'Libre (Pantalla completa sin corte)',
+        '9:16': 'Corte 9:16 (Vertical Reels / TikTok / Shorts)',
+        '1:1': 'Corte 1:1 (Cuadrado Instagram)',
+        '16:9': 'Corte 16:9 (Panorámico YouTube)'
+    };
+    showToast(`Corte de video: ${labels[settings.recordingAspect] || settings.recordingAspect}`);
+}
+
+// Requirement 2, 3 & 4: Screen / Route Video Recording Engine with Clean Start, Hidden Cursor and Aspect Ratio Crop
+let activeCropVideo = null;
+let activeCropAnimId = null;
+
 async function startRecordingWorkflow() {
     if (isPlaying) {
         stopAnimation();
@@ -2677,8 +2760,10 @@ async function startRecordingWorkflow() {
 
     let stream = null;
     try {
+        // Requirement 3: Disable mouse cursor in video capture stream
         stream = await navigator.mediaDevices.getDisplayMedia({
             video: {
+                cursor: 'never',
                 displaySurface: 'browser',
                 frameRate: { ideal: 60, max: 60 }
             },
@@ -2695,8 +2780,96 @@ async function startRecordingWorkflow() {
 
     if (!stream) return;
 
+    // Requirement 2: Close panel, quick-hud, and hotkeys banner BEFORE recording starts!
+    if (panelVisible) togglePanel();
+    const hud = document.getElementById('quick-hud');
+    if (hud) hud.classList.add('opacity-0', 'pointer-events-none', '-translate-y-8');
+    const banner = document.getElementById('hotkeys-banner');
+    if (banner) banner.classList.add('opacity-0', 'pointer-events-none');
+    hideToast();
+
+    // Requirement 3: Hide mouse cursor in DOM
+    document.body.classList.add('recording-active');
+
+    // Wait for drawer and HUD sliding animations (duration-300) to settle completely!
+    await new Promise(resolve => setTimeout(resolve, 450));
+
     activeRecordingStream = stream;
     recordedVideoChunks = [];
+
+    // Requirement 4: Crop 9:16, 1:1, or 16:9 taking "Libre" full-screen as the complete reference
+    let streamToRecord = stream;
+
+    if (settings.recordingAspect && settings.recordingAspect !== 'free') {
+        try {
+            const cropVideo = document.createElement('video');
+            cropVideo.srcObject = stream;
+            cropVideo.muted = true;
+            cropVideo.playsInline = true;
+            await cropVideo.play();
+
+            let attempts = 0;
+            while ((!cropVideo.videoWidth || !cropVideo.videoHeight) && attempts < 25) {
+                await new Promise(r => setTimeout(r, 40));
+                attempts++;
+            }
+
+            const vw = cropVideo.videoWidth || window.innerWidth;
+            const vh = cropVideo.videoHeight || window.innerHeight;
+
+            let targetW = vw;
+            let targetH = vh;
+
+            if (settings.recordingAspect === '9:16') {
+                targetH = vh;
+                targetW = Math.round(targetH * (9 / 16));
+                if (targetW > vw) {
+                    targetW = vw;
+                    targetH = Math.round(targetW * (16 / 9));
+                }
+            } else if (settings.recordingAspect === '1:1') {
+                const side = Math.min(vw, vh);
+                targetW = side;
+                targetH = side;
+            } else if (settings.recordingAspect === '16:9') {
+                targetW = vw;
+                targetH = Math.round(targetW * (9 / 16));
+                if (targetH > vh) {
+                    targetH = vh;
+                    targetW = Math.round(targetH * (16 / 9));
+                }
+            }
+
+            if (targetW % 2 !== 0) targetW--;
+            if (targetH % 2 !== 0) targetH--;
+
+            const sx = Math.max(0, Math.round((vw - targetW) / 2));
+            const sy = Math.max(0, Math.round((vh - targetH) / 2));
+
+            const canvas = document.createElement('canvas');
+            canvas.width = targetW;
+            canvas.height = targetH;
+            const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+
+            activeCropVideo = cropVideo;
+
+            function renderCropLoop() {
+                if (!isRecordingActive) return;
+                if (cropVideo && !cropVideo.paused && !cropVideo.ended) {
+                    ctx.drawImage(cropVideo, sx, sy, targetW, targetH, 0, 0, targetW, targetH);
+                }
+                activeCropAnimId = requestAnimationFrame(renderCropLoop);
+            }
+            renderCropLoop();
+
+            if (canvas.captureStream) {
+                streamToRecord = canvas.captureStream(60);
+            }
+        } catch (cropErr) {
+            console.warn('Canvas cropping fallback to full stream:', cropErr);
+            streamToRecord = stream;
+        }
+    }
 
     let mimeType = 'video/webm;codecs=vp9';
     if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8';
@@ -2705,10 +2878,10 @@ async function startRecordingWorkflow() {
     if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = '';
 
     try {
-        const options = mimeType ? { mimeType, videoBitsPerSecond: 8000000 } : { videoBitsPerSecond: 8000000 };
-        activeMediaRecorder = new MediaRecorder(stream, options);
+        const options = mimeType ? { mimeType, videoBitsPerSecond: 9000000 } : { videoBitsPerSecond: 9000000 };
+        activeMediaRecorder = new MediaRecorder(streamToRecord, options);
     } catch (e) {
-        activeMediaRecorder = new MediaRecorder(stream);
+        activeMediaRecorder = new MediaRecorder(streamToRecord);
     }
 
     activeMediaRecorder.ondataavailable = (e) => {
@@ -2730,17 +2903,23 @@ async function startRecordingWorkflow() {
 
     isRecordingActive = true;
     activeMediaRecorder.start(250);
-    showRecordingBadge();
 
-    // Settle delay to ensure display stream is fully initialized and map tiles rendered
-    await new Promise(resolve => setTimeout(resolve, 400));
-
-    // Launch animation with intro overlay, progressive line, and outro overlay
+    // Launch animation on pristine screen with clean intro overlay, progressive line, and outro overlay
     startAnimation();
 }
 
 function finishAndDownloadRecording(mimeType) {
-    hideRecordingBadge();
+    if (activeCropAnimId) {
+        cancelAnimationFrame(activeCropAnimId);
+        activeCropAnimId = null;
+    }
+    if (activeCropVideo) {
+        activeCropVideo.pause();
+        activeCropVideo.srcObject = null;
+        activeCropVideo = null;
+    }
+    document.body.classList.remove('recording-active');
+
     if (recordedVideoChunks.length === 0) {
         showToast('No se capturaron fotogramas de video');
         return;
@@ -2751,7 +2930,8 @@ function finishAndDownloadRecording(mimeType) {
     const ext = type.includes('mp4') ? 'mp4' : 'webm';
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    const filename = `openboast-recorrido_${dateStr}.${ext}`;
+    const aspectSuffix = settings.recordingAspect && settings.recordingAspect !== 'free' ? `_${settings.recordingAspect.replace(':', '-')}` : '';
+    const filename = `openboast-recorrido_${dateStr}${aspectSuffix}.${ext}`;
 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2766,29 +2946,8 @@ function finishAndDownloadRecording(mimeType) {
     showToast('¡Video grabado y descargado correctamente!');
 }
 
-function showRecordingBadge() {
-    const badge = document.getElementById('recording-badge');
-    const timer = document.getElementById('recording-timer');
-    if (!badge) return;
-    badge.classList.remove('hidden');
-    recordingStartTime = Date.now();
-    if (recordingTimerInterval) clearInterval(recordingTimerInterval);
-    recordingTimerInterval = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
-        const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
-        const s = String(elapsed % 60).padStart(2, '0');
-        if (timer) timer.textContent = `${m}:${s}`;
-    }, 1000);
-}
-
-function hideRecordingBadge() {
-    const badge = document.getElementById('recording-badge');
-    if (badge) badge.classList.add('hidden');
-    if (recordingTimerInterval) {
-        clearInterval(recordingTimerInterval);
-        recordingTimerInterval = null;
-    }
-}
+function showRecordingBadge() {}
+function hideRecordingBadge() {}
 
 // GPS FORMATS IMPORTER (GPX, KML, GeoJSON & JSON)
 function setupDragAndDrop() {
@@ -3168,6 +3327,9 @@ function loadBranchData(lineId, branchId) {
         }
         if (document.getElementById('record-on-play')) {
             document.getElementById('record-on-play').checked = !!settings.recordOnPlay;
+        }
+        if (document.getElementById('rec-aspect-free')) {
+            setRecordingAspect(settings.recordingAspect || 'free');
         }
         
         setMapTile(settings.mapTile || 'osm');
