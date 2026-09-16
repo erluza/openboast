@@ -246,6 +246,10 @@
         <span id="hud-play-icon">▶</span>
         <span id="hud-play-text">Iniciar (Espacio)</span>
     </button>
+    <button onclick="startRecordingWorkflow()" id="hud-record-btn" class="flex items-center gap-1 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 rounded-xl text-xs font-bold transition-all shadow-md" title="Grabar video completo del recorrido y descargarlo">
+        <span id="hud-record-icon">⏺</span>
+        <span id="hud-record-text">Grabar</span>
+    </button>
     <div class="h-4 w-[1px] bg-white/20"></div>
     <button id="hud-undo-btn" onclick="undo()" class="px-2 py-1.5 hover:bg-white/10 rounded-xl text-xs font-bold text-gray-300 hover:text-white transition-all disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1" title="Deshacer (Ctrl+Z)" disabled>
         <span>↶</span> <span class="hidden sm:inline text-[10px]">Ctrl+Z</span>
@@ -264,6 +268,13 @@
     <button onclick="togglePanel()" class="px-2.5 py-1.5 hover:bg-white/10 rounded-xl text-xs font-medium text-blue-300 hover:text-white flex items-center gap-1" title="Abrir/Cerrar panel (H)">
         <span>⚙️</span> <span id="hud-drawer-text">Opciones</span>
     </button>
+</div>
+
+<!-- Live Recording Indicator Badge -->
+<div id="recording-badge" class="fixed top-4 right-4 z-50 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-600/90 backdrop-blur-md text-white font-bold text-xs shadow-2xl animate-pulse hidden">
+    <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+    <span>REC</span>
+    <span id="recording-timer" class="font-mono text-[11px] opacity-90">00:00</span>
 </div>
 
 <!-- Floating Distance Badge (Fixed mode or tracking vehicle) -->
@@ -432,6 +443,14 @@
                 <button onclick="reverseRoute()" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all" title="Invertir sentido del viaje">
                     ⇄ Invertir
                 </button>
+            </div>
+            <!-- Toggle Hitos en Reproducción (Request 1) -->
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-200/80">
+                <div class="pr-2">
+                    <label for="show-markers-playback" class="text-xs font-bold text-gray-700 block cursor-pointer">Mostrar hitos numerados (1, 2, 3...) al reproducir</label>
+                    <p class="text-[10px] text-gray-400">Desactivado por defecto para una vista limpia estilo TravelBoast</p>
+                </div>
+                <input type="checkbox" id="show-markers-playback" onchange="updateShowMarkersPlayback(this.checked)" class="w-4 h-4 text-blue-600 rounded flex-shrink-0">
             </div>
         </div>
 
@@ -746,20 +765,32 @@
 
     <!-- Bottom Action Dock -->
     <div class="p-4 border-t border-gray-200/60 bg-white/70 space-y-2.5">
-        <button id="play-btn" onclick="toggleAnimation()" disabled class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-            <span id="play-icon" class="text-base">▶</span>
-            <span id="play-text">Iniciar Recorrido (Espacio)</span>
-        </button>
+        <div class="grid grid-cols-2 gap-2">
+            <button id="play-btn" onclick="toggleAnimation()" disabled class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-xs shadow-lg shadow-blue-500/25 hover:shadow-xl hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+                <span id="play-icon" class="text-sm">▶</span>
+                <span id="play-text">Iniciar (Espacio)</span>
+            </button>
+            <button id="record-btn" onclick="startRecordingWorkflow()" disabled class="w-full py-3 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white rounded-2xl font-black text-xs shadow-lg shadow-red-500/25 hover:shadow-xl hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5" title="Graba el video del recorrido completo (con intro y outro) y lo descarga directamente">
+                <span id="record-icon" class="text-sm">⏺</span>
+                <span id="record-text">Grabar Video</span>
+            </button>
+        </div>
 
-        <div class="flex items-center justify-between px-1">
-            <label class="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
-                <input type="checkbox" id="auto-hide-panel" checked class="w-3.5 h-3.5 text-blue-600 rounded">
-                <span>Ocultar interfaz al iniciar</span>
-            </label>
-            <div class="flex gap-2">
-                <button onclick="clearAll()" class="text-xs text-gray-500 hover:text-red-600 font-bold transition-colors">🗑️ Limpiar</button>
-                <button onclick="fitBounds()" class="text-xs text-blue-600 hover:text-blue-700 font-bold transition-colors">🔍 Centrar</button>
+        <div class="space-y-1 px-1">
+            <div class="flex items-center justify-between">
+                <label class="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                    <input type="checkbox" id="auto-hide-panel" checked class="w-3.5 h-3.5 text-blue-600 rounded">
+                    <span>Ocultar interfaz al reproducir</span>
+                </label>
+                <div class="flex gap-2">
+                    <button onclick="clearAll()" class="text-xs text-gray-500 hover:text-red-600 font-bold transition-colors">🗑️ Limpiar</button>
+                    <button onclick="fitBounds()" class="text-xs text-blue-600 hover:text-blue-700 font-bold transition-colors">🔍 Centrar</button>
+                </div>
             </div>
+            <label class="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 cursor-pointer">
+                <input type="checkbox" id="record-on-play" onchange="settings.recordOnPlay = this.checked" class="w-3.5 h-3.5 text-rose-600 rounded">
+                <span>Grabar video automáticamente al pulsar Iniciar (Espacio)</span>
+            </label>
         </div>
     </div>
 </div>
@@ -880,12 +911,21 @@ let redoStack = [];
 let isPerformingUndoRedo = false;
 let lastDragSnapshot = null;
 
+// Video Recorder State
+let activeMediaRecorder = null;
+let activeRecordingStream = null;
+let recordedVideoChunks = [];
+let isRecordingActive = false;
+let recordingTimerInterval = null;
+let recordingStartTime = 0;
+
 // Active settings - DEFAULT FRAME IS FREE (FULL SCREEN)
 let settings = {
     // Styling & Vehicle
     routeColor: '#ef4444',
     routeWidth: 6,
     routeRenderMode: 'progressive-pure', // 'progressive-pure', 'progressive-faint', 'full'
+    showPointMarkersDuringPlayback: false, // Default false: hide numbered milestone markers (1, 2, 3...) during animation!
     totalDuration: 35,
     vehicle: 'van',
     vehicleSize: 42,
@@ -903,6 +943,7 @@ let settings = {
     frameOpacity: 70,
     mapTile: 'osm', // 100% Free OpenStreetMap as safe default
     loopRoute: false, // Default false: stop cleanly at destination!
+    recordOnPlay: false, // Automatically launch recorder when pressing play
 
     // Distance Badge
     showDistanceBadge: true,
@@ -1113,6 +1154,12 @@ function init() {
     updateVehiclePreview();
     updateLastSavedBanner();
     updateUndoRedoUI();
+    if (document.getElementById('show-markers-playback')) {
+        document.getElementById('show-markers-playback').checked = !!settings.showPointMarkersDuringPlayback;
+    }
+    if (document.getElementById('record-on-play')) {
+        document.getElementById('record-on-play').checked = !!settings.recordOnPlay;
+    }
 
     setFrameMode('free', false);
 }
@@ -2094,8 +2141,17 @@ let animationState = {
 };
 
 function updatePlayButton() {
+    const canPlay = points.length >= 2;
     const btn = document.getElementById('play-btn');
-    btn.disabled = points.length < 2;
+    if (btn) btn.disabled = !canPlay;
+    const recBtn = document.getElementById('record-btn');
+    if (recBtn) recBtn.disabled = !canPlay;
+    const hudRecBtn = document.getElementById('hud-record-btn');
+    if (hudRecBtn) {
+        hudRecBtn.disabled = !canPlay;
+        hudRecBtn.classList.toggle('opacity-40', !canPlay);
+        hudRecBtn.classList.toggle('cursor-not-allowed', !canPlay);
+    }
 }
 
 async function toggleAnimation() {
@@ -2103,7 +2159,11 @@ async function toggleAnimation() {
         stopAnimation();
     } else {
         if (points.length < 2) return;
-        startAnimation();
+        if (settings.recordOnPlay) {
+            startRecordingWorkflow();
+        } else {
+            startAnimation();
+        }
     }
 }
 
@@ -2124,12 +2184,21 @@ function stopAnimation() {
     routeLines.forEach(l => l.setStyle({ opacity: 0.85 }));
 
     document.getElementById('play-icon').textContent = '▶';
-    document.getElementById('play-text').textContent = 'Iniciar Recorrido (Espacio)';
+    document.getElementById('play-text').textContent = 'Iniciar (Espacio)';
     document.getElementById('hud-play-icon').textContent = '▶';
     document.getElementById('hud-play-text').textContent = 'Iniciar (Espacio)';
     
-    document.getElementById('play-btn').className = 'w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2';
+    document.getElementById('play-btn').className = 'w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-xs shadow-lg shadow-blue-500/25 hover:shadow-xl hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5';
     document.getElementById('hud-play-btn').className = 'flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-bold transition-all shadow-md';
+
+    const recText = document.getElementById('record-text');
+    if (recText) recText.textContent = 'Grabar Video';
+    const recIcon = document.getElementById('record-icon');
+    if (recIcon) recIcon.textContent = '⏺';
+    const hudRecText = document.getElementById('hud-record-text');
+    if (hudRecText) hudRecText.textContent = 'Grabar';
+    const hudRecIcon = document.getElementById('hud-record-icon');
+    if (hudRecIcon) hudRecIcon.textContent = '⏺';
 
     hidePointOverlay();
     document.getElementById('center-content').classList.remove('active');
@@ -2142,18 +2211,35 @@ function stopAnimation() {
     const banner = document.getElementById('hotkeys-banner');
     if (hotkeysVisible && banner) banner.classList.remove('opacity-0', 'pointer-events-none');
 
+    // Requirement 1: Always restore all point markers when exiting playback so user can edit and drag them freely!
+    points.forEach(p => {
+        if (!map.hasLayer(p.marker)) p.marker.addTo(map);
+    });
     updatePointStyles();
+
+    // Requirement 2: Cleanly stop active recording and trigger video export/download
+    if (isRecordingActive) {
+        isRecordingActive = false;
+        hideRecordingBadge();
+        if (activeMediaRecorder && activeMediaRecorder.state !== 'inactive') {
+            try {
+                activeMediaRecorder.stop();
+            } catch (err) {
+                console.error('Error stopping MediaRecorder:', err);
+            }
+        }
+        if (activeRecordingStream) {
+            activeRecordingStream.getTracks().forEach(track => track.stop());
+            activeRecordingStream = null;
+        }
+    }
 }
 
 async function startAnimation() {
     if (points.length < 2) return;
 
     // Safety validation: ensure segments exist and match points sequence exactly
-    if (routeSegments.length !== points.length - 1) {
-        await recalculateRoutes();
-    }
-
-    if (routeSegments.length === 0) {
+    if (routeSegments.length !== points.length - 1 || routeSegments.length === 0) {
         await recalculateRoutes();
     }
 
@@ -2174,12 +2260,23 @@ async function startAnimation() {
     }
 
     document.getElementById('play-icon').textContent = '⏹';
-    document.getElementById('play-text').textContent = 'Detener Recorrido';
+    document.getElementById('play-text').textContent = 'Detener';
     document.getElementById('hud-play-icon').textContent = '⏹';
     document.getElementById('hud-play-text').textContent = 'Detener';
     
-    document.getElementById('play-btn').className = 'w-full py-3.5 bg-gradient-to-r from-rose-600 to-red-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-red-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2';
+    document.getElementById('play-btn').className = 'w-full py-3 bg-gradient-to-r from-rose-600 to-red-600 text-white rounded-2xl font-black text-xs shadow-lg shadow-red-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5';
     document.getElementById('hud-play-btn').className = 'flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 rounded-xl text-xs font-bold transition-all shadow-md';
+
+    if (isRecordingActive) {
+        const recText = document.getElementById('record-text');
+        if (recText) recText.textContent = 'Detener';
+        const recIcon = document.getElementById('record-icon');
+        if (recIcon) recIcon.textContent = '⏹';
+        const hudRecText = document.getElementById('hud-record-text');
+        if (hudRecText) hudRecText.textContent = 'Detener';
+        const hudRecIcon = document.getElementById('hud-record-icon');
+        if (hudRecIcon) hudRecIcon.textContent = '⏹';
+    }
 
     document.getElementById('progress-bar').classList.remove('hidden');
 
@@ -2212,8 +2309,20 @@ async function startAnimation() {
 
     applyRouteRenderMode();
 
-    if (settings.routeRenderMode === 'progressive-pure') {
-        points.forEach(p => map.removeLayer(p.marker));
+    // Requirement 1: Control numbered point markers during playback
+    if (!settings.showPointMarkersDuringPlayback) {
+        // By default, hide all point pins during playback for a clean animation
+        points.forEach(p => {
+            if (map.hasLayer(p.marker)) map.removeLayer(p.marker);
+        });
+    } else {
+        // If user enabled showing markers during playback
+        if (settings.routeRenderMode === 'progressive-pure') {
+            // In progressive mode, start with only first marker visible, others revealed progressively
+            points.forEach((p, idx) => {
+                if (idx > 0 && map.hasLayer(p.marker)) map.removeLayer(p.marker);
+            });
+        }
     }
 
     let initialAngle = 0;
@@ -2418,8 +2527,11 @@ function animateFrame() {
             animationState.currentPointIndex = i;
             const pt = points[i];
 
-            if (settings.routeRenderMode === 'progressive-pure') {
-                pt.marker.addTo(map);
+            // Requirement 1: Only reveal point markers if user enabled showing markers during playback
+            if (settings.showPointMarkersDuringPlayback) {
+                if (!map.hasLayer(pt.marker)) {
+                    pt.marker.addTo(map);
+                }
             }
 
             if (pt.showOverlay) {
@@ -2441,7 +2553,7 @@ function animateFrame() {
             showCenterOverlay(settings.endTitle, settings.endText, settings.endImage);
             setTimeout(() => {
                 document.getElementById('center-content').classList.remove('active');
-                if (settings.loopRoute) {
+                if (settings.loopRoute && !isRecordingActive) {
                     startAnimation();
                 } else {
                     stopAnimation();
@@ -2449,7 +2561,7 @@ function animateFrame() {
             }, (settings.endDuration || 3) * 1000);
         } else {
             setTimeout(() => {
-                if (settings.loopRoute) {
+                if (settings.loopRoute && !isRecordingActive) {
                     startAnimation();
                 } else {
                     stopAnimation();
@@ -2517,6 +2629,165 @@ function showCenterOverlay(title, text, image) {
         img.style.display = 'none';
     }
     overlay.classList.add('active');
+}
+
+// Requirement 1: Toggle Point Markers visibility during playback
+function updateShowMarkersPlayback(checked) {
+    settings.showPointMarkersDuringPlayback = checked;
+    if (isPlaying) {
+        if (!checked) {
+            points.forEach(p => {
+                if (map.hasLayer(p.marker)) map.removeLayer(p.marker);
+            });
+        } else {
+            points.forEach(p => {
+                if (!map.hasLayer(p.marker)) p.marker.addTo(map);
+            });
+            updatePointStyles();
+        }
+    }
+}
+
+// Requirement 2: Screen / Route Video Recording Engine
+async function startRecordingWorkflow() {
+    if (isPlaying) {
+        stopAnimation();
+        return;
+    }
+
+    if (points.length < 2) {
+        alert('Agrega al menos 2 puntos en el mapa para poder grabar el recorrido.');
+        return;
+    }
+
+    // Ensure all points and segments are completely calculated before capturing
+    if (routeSegments.length !== points.length - 1 || routeSegments.length === 0) {
+        showToast('Preparando y calculando ruta para grabación...');
+        await recalculateRoutes();
+        if (routeSegments.length !== points.length - 1) {
+            alert('No se pudieron conectar los puntos de la ruta.');
+            return;
+        }
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        alert('Tu navegador no soporta grabación de pantalla (getDisplayMedia). Te recomendamos usar Chrome, Edge o navegadores compatibles.');
+        return;
+    }
+
+    let stream = null;
+    try {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+                displaySurface: 'browser',
+                frameRate: { ideal: 60, max: 60 }
+            },
+            audio: false,
+            preferCurrentTab: true,
+            selfBrowserSurface: 'include',
+            systemAudio: 'exclude'
+        });
+    } catch (err) {
+        console.warn('Grabación cancelada o permiso denegado:', err);
+        showToast('Grabación cancelada');
+        return;
+    }
+
+    if (!stream) return;
+
+    activeRecordingStream = stream;
+    recordedVideoChunks = [];
+
+    let mimeType = 'video/webm;codecs=vp9';
+    if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8';
+    if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+    if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/mp4';
+    if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = '';
+
+    try {
+        const options = mimeType ? { mimeType, videoBitsPerSecond: 8000000 } : { videoBitsPerSecond: 8000000 };
+        activeMediaRecorder = new MediaRecorder(stream, options);
+    } catch (e) {
+        activeMediaRecorder = new MediaRecorder(stream);
+    }
+
+    activeMediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+            recordedVideoChunks.push(e.data);
+        }
+    };
+
+    activeMediaRecorder.onstop = () => {
+        finishAndDownloadRecording(mimeType);
+    };
+
+    const track = stream.getVideoTracks()[0];
+    if (track) {
+        track.onended = () => {
+            if (isPlaying) stopAnimation();
+        };
+    }
+
+    isRecordingActive = true;
+    activeMediaRecorder.start(250);
+    showRecordingBadge();
+
+    // Settle delay to ensure display stream is fully initialized and map tiles rendered
+    await new Promise(resolve => setTimeout(resolve, 400));
+
+    // Launch animation with intro overlay, progressive line, and outro overlay
+    startAnimation();
+}
+
+function finishAndDownloadRecording(mimeType) {
+    hideRecordingBadge();
+    if (recordedVideoChunks.length === 0) {
+        showToast('No se capturaron fotogramas de video');
+        return;
+    }
+
+    const type = mimeType || (recordedVideoChunks[0] ? recordedVideoChunks[0].type : 'video/webm');
+    const blob = new Blob(recordedVideoChunks, { type });
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const filename = `openboast-recorrido_${dateStr}.${ext}`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    recordedVideoChunks = [];
+    showToast('¡Video grabado y descargado correctamente!');
+}
+
+function showRecordingBadge() {
+    const badge = document.getElementById('recording-badge');
+    const timer = document.getElementById('recording-timer');
+    if (!badge) return;
+    badge.classList.remove('hidden');
+    recordingStartTime = Date.now();
+    if (recordingTimerInterval) clearInterval(recordingTimerInterval);
+    recordingTimerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+        const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const s = String(elapsed % 60).padStart(2, '0');
+        if (timer) timer.textContent = `${m}:${s}`;
+    }, 1000);
+}
+
+function hideRecordingBadge() {
+    const badge = document.getElementById('recording-badge');
+    if (badge) badge.classList.add('hidden');
+    if (recordingTimerInterval) {
+        clearInterval(recordingTimerInterval);
+        recordingTimerInterval = null;
+    }
 }
 
 // GPS FORMATS IMPORTER (GPX, KML, GeoJSON & JSON)
@@ -2891,6 +3162,12 @@ function loadBranchData(lineId, branchId) {
         }
         if (document.getElementById('vehicle-angle-offset')) {
             document.getElementById('vehicle-angle-offset').value = settings.vehicleAngleOffset;
+        }
+        if (document.getElementById('show-markers-playback')) {
+            document.getElementById('show-markers-playback').checked = !!settings.showPointMarkersDuringPlayback;
+        }
+        if (document.getElementById('record-on-play')) {
+            document.getElementById('record-on-play').checked = !!settings.recordOnPlay;
         }
         
         setMapTile(settings.mapTile || 'osm');
